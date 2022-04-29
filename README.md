@@ -47,6 +47,7 @@ make
 
 * upload: upload a file 
 * download: download a file 
+* port: create a portforward
 
    > This documentation may be out of date, please refer to the output of the help command
 
