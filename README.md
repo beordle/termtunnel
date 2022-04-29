@@ -44,6 +44,9 @@ make
 
 
 ## REPL Command
+
+* upload upload a file 
+
    > This documentation may be out of date, please refer to the output of the help command
 
 
