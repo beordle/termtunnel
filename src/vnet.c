@@ -9,19 +9,15 @@
 #include "lwip/api.h"
 #include "lwip/sockets.h"
 #include "lwipopts.h"
-//#include "thirdparty/lwip/include/ipv4/lwip/inet.h"
-//#include "thirdparty/l/wip/include/ipv4/lwip/ip_addr.h"
+#include "lwip/debug.h"
+#include "lwip/tcpip.h"
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-
-#include "lwip/debug.h"
-#include "lwip/tcpip.h"
-
-//#include "lwip/o
 #include "agent.h"
 #include "config.h"
 #include "log.h"
@@ -36,7 +32,6 @@
 #include "thirdparty/queue/queue.h"
 #include "utils.h"
 #include "vnet.h"
-//#include "vclient.h"
 #include "fileexchange.h"
 #include "portforward.h"
 #include "socksproxy.h"
@@ -212,20 +207,18 @@ void *vnet_init(callback_t cb) {
 
   netif_set_up(&g_netif);
 
-  if (get_state_mode() == MODE_SERVER_PROCESS) {
+  if (get_state_mode() == MODE_AGENT_PROCESS) {
     // pass
-  } else {
-    // agent
-    sys_thread_new("file_receiver", file_receiver_start, NULL,
+      sys_thread_new("file_receiver", file_receiver_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
-    sys_thread_new("file_sender", file_sender_start, NULL,
-                   DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
-    sys_thread_new("portforward_static_server",
-                   portforward_static_remote_server_start, NULL,
-                   DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
-    sys_thread_new("socksproxy_server", socksproxy_remote_start, NULL,
+      sys_thread_new("file_sender", file_sender_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
   }
+  sys_thread_new("portforward_static_server",
+                   portforward_static_remote_server_start, NULL,
+                   DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
+  sys_thread_new("socksproxy_server", socksproxy_remote_start, NULL,
+                   DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
 
   return &g_netif;
 }
