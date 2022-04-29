@@ -45,7 +45,8 @@ make
 
 ## REPL Command
 
-* upload upload a file 
+* upload: upload a file 
+* download: download a file 
 
    > This documentation may be out of date, please refer to the output of the help command
 
