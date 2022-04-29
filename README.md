@@ -31,7 +31,7 @@ When a tunnel needs to be established, just run command `termtunnel -a` on that 
 
 In remote Termtunnel console, you are allowed to download files up and down, or create socks5 proxy.
 
-For example, you can execute `termtunnel ssh root@19.95.02.23` locally, then start `/tmp/termtunnel -a` on the ssh host to enter the interactive console, and then you can type `upload` to upload local file to remote or create a port forward.
+For example, you can execute `termtunnel ssh root@19.95.02.23` locally, then start `/tmp/termtunnel -a` on the ssh host to enter the interactive console, and then you can type `upload` to upload local file to remote or create a port forward. supported commands are listed in the (REPL Command)[#repl-command] section.
 
 ## Download
    See [Github Releases](https://github.com/beordle/termtunnel/releases)
@@ -41,6 +41,11 @@ For example, you can execute `termtunnel ssh root@19.95.02.23` locally, then sta
 cmake .
 make
 ```
+
+
+## REPL Command
+   > fff
+
 
 ## FAQ
 
