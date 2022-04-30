@@ -13,7 +13,7 @@ endif ()
 add_subdirectory(thirdparty/libuv)
 include_directories(thirdparty/libuv/include) 
 
-add_compile_options(-funwind-tables -fasynchronous-unwind-tables -fpermissive -g -O0) #  -rdynamic) # -O2)
+add_compile_options(-fpermissive -O3)
 
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lwip/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/port/include)
@@ -70,7 +70,7 @@ thirdparty/setproctitle.c
 thirdparty/tinyfiledialogs/tinyfiledialogs.c
 )
 
-target_link_libraries(termtunnel uv_a)# lwip)
+target_link_libraries(termtunnel uv_a)
 if (LINUX)
     target_link_libraries(termtunnel PUBLIC "-static")
 endif()
