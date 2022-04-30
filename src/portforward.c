@@ -47,6 +47,7 @@ typedef struct port_listen {
 
 static void portforward_static_server_request(void *p) {
   int sd = (int)p;
+  set_vnet_socket_nodelay(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
   CHECK(sd >= 0, "sd: %d", sd);
@@ -91,7 +92,6 @@ static void portforward_static_server_request(void *p) {
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
   addr.sin_addr.s_addr = inet_addr(host);
-  // set_socket(s);
   /* connect */
   log_info("start connect %s:%hu", host, port);
   int ret = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
@@ -111,35 +111,9 @@ static void portforward_static_server_request(void *p) {
   return;
 }
 
-void portforward_static_remote_server_start() {
-  int sock, new_sd;
-  struct lwip_sockaddr_in address;
-  int ret;
-
-  if ((sock = lwip_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    log_error("socket %d", sock);
-    return;
-  }
-
-  address.sin_family = AF_INET;
-  address.sin_port = htons(port_forward_static_service_port);
-  address.sin_addr.s_addr = INADDR_ANY;
-  ret = lwip_bind(sock, (struct sockaddr *)&address, sizeof(address));
-  CHECK(ret == 0, "bind error %d", ret);
-  ret = lwip_listen(sock, 50);
-  CHECK(ret >= 0, "lwip_listen error %d", ret);
-  log_info("do listen");
-  pthread_t *worker = (pthread_t *)malloc(sizeof(pthread_t));  // TODO(jdz) free
-  while (true) {
-    if ((new_sd = lwip_accept(sock, NULL, NULL)) >= 0) {
-      pthread_create(worker, NULL, &portforward_static_server_request,
-                     (void *)new_sd);
-      pthread_detach(*worker);
-    } else {
-      log_info("abort %d %d %s", new_sd, errno, strerror(errno));
-    }
-  }
-  return;
+int  portforward_static_remote_server_start() {
+    return vnet_listen_at(port_forward_static_service_port,
+        portforward_static_server_request, "portforward_static_server");
 }
 
 pthread_mutex_t lock;
@@ -168,7 +142,7 @@ static void loop_lwipsocket_to_socket(int *arg) {
       // return;
     }
     int r = lwip_recv(lwip_fd, buf, READ_CHUNK_SIZE,
-                      MSG_DONTWAIT);  // agent 这里卡住了，主要是由于
+                      MSG_DONTWAIT);
     log_info("lwip_readed %d", r);
     if (r < 0) {
       return;
@@ -222,22 +196,10 @@ int pipe_lwip_socket_and_socket_pair(int lwip_fd, int fd) {
   int *array = (int *)malloc(2 * sizeof(int));
   *(array) = lwip_fd;
   *(array + 1) = fd;
-  pthread_t worker1;
   pthread_t worker2;
-
-  // pthread_create(&worker1, NULL, &loop_lwipsocket_to_socket, (void *)array);
   pthread_create(&worker2, NULL, &loop_socket_to_lwipsocket, (void *)array);
-
   loop_lwipsocket_to_socket((void *)array);
-  log_info("main close");
   pthread_join(worker2, NULL);
-  // close(fd);
-  log_info("close 2");
-  // pthread_join(worker1, NULL);
-  // //可以确定的是，1关不掉，在agent中。其实也就是事实上的server
-  // log_info("close 1");
-
-  // free(array);
   log_info("pipe_lwip_socket_and_socket_pair done");
   return 0;
 }
@@ -246,7 +208,6 @@ void portforward_static_server_pipe(port_listen_t *pe) {
   // accept
   log_info("connect %s", pe->host);
   int lwip_fd = vnet_tcp_connect(port_forward_static_service_port);
-  // TODO(jdz) 如果这里发送的是，socks服务器的地址，就符合期望了。
   vnet_send(lwip_fd, pe->host, strlen(pe->host) + 1);  // with_zero_as_split
   uint16_t tmp = htons(pe->port);
   vnet_send(lwip_fd, &tmp, sizeof(uint16_t));
@@ -263,6 +224,7 @@ void portforward_static_server_pipe(port_listen_t *pe) {
 void portforward_transparent_server_pipe(port_listen_t *pe) {
   log_info("connect 1080");
   int lwip_fd = vnet_tcp_connect(socks5_port);
+
   pipe_lwip_socket_and_socket_pair(lwip_fd, pe->local_fd);
   free(pe);
   close(pe->local_fd);
@@ -276,18 +238,15 @@ static void portforward_service_handler(port_listen_t *pe) {
   int listen_fd = pe->local_fd;
   while (true) {
     if ((new_sd = accept(listen_fd, NULL, NULL)) >= 0) {
-      pthread_t *worker =
-          (pthread_t *)malloc(sizeof(pthread_t));  // TODO(jdz)  free
+      pthread_t *worker = (pthread_t *)malloc(sizeof(pthread_t));  // TODO(jdz)  free
       port_listen_t *child_pe = (port_listen_t *)malloc(sizeof(port_listen_t));
       strcpy(child_pe->host, pe->host);
       child_pe->port = pe->port;
       child_pe->local_fd = new_sd;
       if (pe->port == 0) {  // socksproxy
-        pthread_create(worker, NULL, &portforward_transparent_server_pipe,
-                       (void *)child_pe);
+        pthread_create(worker, NULL, &portforward_transparent_server_pipe, (void *)child_pe);
       } else {
-        pthread_create(worker, NULL, &portforward_static_server_pipe,
-                       (void *)child_pe);
+        pthread_create(worker, NULL, &portforward_static_server_pipe, (void *)child_pe);
       }
     } else {
       log_info("abort the accept");

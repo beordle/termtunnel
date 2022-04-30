@@ -7,10 +7,10 @@
 
 #ifndef TERMTUNNEL_FILEEXCHANGE_H
 #define TERMTUNNEL_FILEEXCHANGE_H
-void file_send_start();
-void file_receiver_start();
+int file_send_start();
+int file_receiver_start();
 
-void file_recv_start();
-void file_sender_start();
+int file_recv_start();
+int file_sender_start();
 
 #endif

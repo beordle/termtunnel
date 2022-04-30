@@ -16,6 +16,7 @@ void vnet_deinit();
 int vnet_tcp_connect(uint16_t port);
 int vnet_send(int s, const void *data, size_t size);
 int vnet_recv(int s, const void *data, size_t size);
+int vnet_listen_at(uint16_t port, void *cb,char* thread_desc);
 int vnet_close(int s);
-void set_socket(int nfd);
+void set_vnet_socket_nodelay(int nfd);
 #endif

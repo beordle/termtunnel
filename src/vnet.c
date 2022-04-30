@@ -42,11 +42,44 @@ char *server_ip = "192.168.1.111";
 
 int16_t listen_port = 700;
 
-void set_socket(int nfd) {
+void set_vnet_socket_nodelay(int nfd) {
   int flags = 1;
   size_t flglen = sizeof(flags);
   lwip_setsockopt(nfd, SOL_SOCKET, TCP_NODELAY, &flags, &flglen);
 }
+
+
+int vnet_listen_at(uint16_t port, void *cb,char* thread_desc) {
+  int sock, new_sd;
+  struct sockaddr_in address, remote;
+  int size;
+  int ret;
+
+  if ((sock = lwip_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    return -1;
+  }
+
+  address.sin_family = AF_INET;
+  address.sin_port = htons(port);
+  address.sin_addr.s_addr = INADDR_ANY;  // inet_addr(server_ip); //
+  ret = lwip_bind(sock, (struct sockaddr *)&address, sizeof(address));
+  CHECK(ret == 0, "bind error");
+  ret = lwip_listen(sock, 10);
+  CHECK(ret >= 0, "lwip_listen error %d", ret);
+  log_info("do listen");
+  while (true) {
+    if ((new_sd = lwip_accept(sock, (struct sockaddr *)&remote, (socklen_t *)&size)) >= 0) {
+      log_info("new tcp");
+      sys_thread_new(thread_desc, cb,
+                     (void *)new_sd, DEFAULT_THREAD_STACKSIZE,
+                     DEFAULT_THREAD_PRIO);
+    } else {
+      log_info("abort %d %d %s", new_sd, errno, strerror(errno));
+      
+    }
+  }
+}
+
 
 int vnet_tcp_connect(uint16_t port) {
   int s = lwip_socket(AF_INET, SOCK_STREAM, 0);
@@ -57,7 +90,7 @@ int vnet_tcp_connect(uint16_t port) {
   addr.sin_family = AF_INET;
   addr.sin_port = lwip_htons(port);
   addr.sin_addr.s_addr = inet_addr(server_ip);
-  set_socket(s);
+  set_vnet_socket_nodelay(s);
   /* connect */
   log_info("start connect");
   int ret = lwip_connect(s, (struct sockaddr *)&addr, sizeof(addr));

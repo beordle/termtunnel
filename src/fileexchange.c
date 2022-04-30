@@ -35,9 +35,9 @@ typedef struct path_exchange {
   //  TODO chmod etc
 } path_exchange_t;
 
-static void file_receiver_request(void *p) {
+static int file_receiver_request(void *p) {
   int sd = (int)p;
-  set_socket(sd);
+  set_vnet_socket_nodelay(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
   log_info("sd: %d", sd);
@@ -48,7 +48,7 @@ static void file_receiver_request(void *p) {
     if (n <= 0) {
       lwip_close(sd);
       log_info("error stream");
-      return;
+      return -1;
     }
     readbytes += 1;
   } while (*(recv_buf + readbytes - 1) != '\0');
@@ -78,41 +78,15 @@ static void file_receiver_request(void *p) {
   log_error("virserver process_echo_request closeed!!");
   /* close connection */
   lwip_close(sd);
-  return;
+  return 0;
 }
 
-void file_receiver_start() {
-  int sock, new_sd;
-  struct sockaddr_in address, remote;
-  int size;
-  int ret;
-
-  if ((sock = lwip_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    return;
-  }
-
-  address.sin_family = AF_INET;
-  address.sin_port = htons(receiver_service_port);
-  address.sin_addr.s_addr = INADDR_ANY;  // inet_addr(server_ip); //
-  ret = lwip_bind(sock, (struct sockaddr *)&address, sizeof(address));
-  CHECK(ret == 0, "bind error");
-  ret = lwip_listen(sock, 10);
-  CHECK(ret >= 0, "lwip_listen error %d", ret);
-  log_info("do listen");
-  while (true) {
-    if ((new_sd = lwip_accept(sock, (struct sockaddr *)&remote,
-                              (socklen_t *)&size)) >= 0) {
-      log_info("new tcp");
-      sys_thread_new("file_receiver_worker", file_receiver_request,
-                     (void *)new_sd, DEFAULT_THREAD_STACKSIZE,
-                     DEFAULT_THREAD_PRIO);
-    } else {
-      log_info("abort");
-    }
-  }
+int file_receiver_start() {
+    return vnet_listen_at(receiver_service_port,
+        file_receiver_request, "file_receiver_worker");
 }
 
-static void file_sender_request(void *p) {
+static int file_sender_request(void *p) {
   int sd = (int)p;
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
@@ -124,7 +98,7 @@ static void file_sender_request(void *p) {
     if (n <= 0) {
       lwip_close(sd);
       log_info("error stream");
-      return;
+      return -1;
     }
     readbytes += 1;
   } while (*(recv_buf + readbytes - 1) != '\0');
@@ -154,40 +128,16 @@ static void file_sender_request(void *p) {
   log_error("virserver process_echo_request closeed!!");
   /* close connection */
   lwip_close(sd);
-  return;
+  return 0;
 }
 
-void file_sender_start() {
-  int sock, new_sd;
-  struct sockaddr_in address, remote;
-  int size;
-  int ret;
+int file_sender_start() {
+  return vnet_listen_at(sender_service_port,
+        file_sender_request, "file_sender_worker");
 
-  if ((sock = lwip_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    return;
-  }
-
-  address.sin_family = AF_INET;
-  address.sin_port = htons(sender_service_port);
-  address.sin_addr.s_addr = INADDR_ANY;  // inet_addr(server_ip); //
-  ret = lwip_bind(sock, (struct sockaddr *)&address, sizeof(address));
-  CHECK(ret == 0, "bind error");
-  ret = lwip_listen(sock, 10);
-  CHECK(ret >= 0, "lwip_listen error %d", ret);
-  log_info("do listen");
-  while (true) {
-    if ((new_sd = lwip_accept(sock, (struct sockaddr *)&remote,
-                              (socklen_t *)&size)) >= 0) {
-      log_info("new tcp");
-      sys_thread_new("file_sender_worker", file_sender_request, (void *)new_sd,
-                     DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
-    } else {
-      log_info("abort");
-    }
-  }
 }
 
-static void file_send_request(path_exchange_t *pe) {
+static int file_send_request(path_exchange_t *pe) {
   int nfd = vnet_tcp_connect(receiver_service_port);
   log_debug("file_send_request file %s", pe->dst_path);
   vnet_send(nfd, pe->dst_path, strlen(pe->dst_path) + 1);  // with_zero_as_split
@@ -195,7 +145,7 @@ static void file_send_request(path_exchange_t *pe) {
   if (fd < 0) {
     log_error("open_error");
     vnet_close(nfd);
-    return;
+    return -1;
   }
   char buf[READ_CHUNK_SIZE];
   while (true) {
@@ -214,7 +164,7 @@ static void file_send_request(path_exchange_t *pe) {
   // check path is exist, file can writeable.
   vnet_close(nfd);
   close(fd);
-  return;
+  return 0;
 }
 
 #if 0
@@ -249,7 +199,7 @@ int file_send_start(char *src_path, char *dst_path) {
   return 0;
 }
 
-static void file_recv_request(path_exchange_t *pe) {
+static int file_recv_request(path_exchange_t *pe) {
   int nfd = vnet_tcp_connect(sender_service_port);
   vnet_send(nfd, pe->src_path, strlen(pe->src_path) + 1);  // with_zero_as_split
   log_info("open %s for write to recv", pe->dst_path);
@@ -258,6 +208,7 @@ static void file_recv_request(path_exchange_t *pe) {
   if (fd < 0) {
     vnet_close(nfd);
     log_error("open error");
+    return 0;
   }
   char buf[READ_CHUNK_SIZE];
   while (true) {
@@ -270,10 +221,10 @@ static void file_recv_request(path_exchange_t *pe) {
     }
     write(fd, buf, readbytes);
   }
-  // check path is exist, file can writeable.
+  // TODO(jdz) check path is exist, file can writeable.
   vnet_close(nfd);
   close(fd);
-  return;
+  return 0;
 }
 
 int file_recv_start(char *src_path, char *dst_path) {

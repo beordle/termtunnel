@@ -25,7 +25,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-
+#include "vnet.h"
 #include "log.h"
 #include "portforward.h"
 #include "vclient.h"
@@ -449,63 +449,7 @@ void *app_thread_process(void *fd) {
   return NULL;
 }
 
-struct lwip_sockaddr_in {
-  uint8_t sin_len;
-  uint8_t sin_family;
-  uint16_t sin_port;
-  uint32_t sin_addr;
-#define SIN_ZERO_LEN 8
-  char sin_zero[SIN_ZERO_LEN];
-};
-
 int socksproxy_remote_start() {
-  log_info("4444");
-  int sock_fd, net_fd;
-  int optval = 1;
-  struct lwip_sockaddr_in local, remote;
-  socklen_t remotelen;
-  if ((sock_fd = lwip_socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    log_info("socket()");
-    return -1;
-  }
-  memset(&local, 0, sizeof(local));
-  local.sin_family = AF_INET;
-  local.sin_addr = htonl(INADDR_ANY);
-  local.sin_port = htons(socks5_port);
-
-  if (lwip_bind(sock_fd, (struct sockaddr *)&local, sizeof(local)) < 0) {
-    log_info("bind()");
-    return -1;
-  }
-
-  if (lwip_listen(sock_fd, 25) < 0) {
-    log_info("listen()");
-    return -1;
-  }
-
-  remotelen = sizeof(remote);
-  memset(&remote, 0, sizeof(remote));
-
-  log_info("Listening port %d...", socks5_port);
-
-  pthread_t worker;
-  while (true) {
-    if ((net_fd = lwip_accept(sock_fd, (struct sockaddr *)&remote,
-                              &remotelen)) < 0) {
-      log_info("accept()");
-      // exit(1);
-    }
-    log_info("new socks client");
-    if (pthread_create(&worker, NULL, app_thread_process, (void *)&net_fd) ==
-        0) {
-      log_info("pthread_create() succ");
-      pthread_detach(worker);
-    } else {
-      log_info("pthread_create()");
-    }
-  }
-  return 0;
+  return vnet_listen_at(socks5_port, app_thread_process, "socksproxy");
 }
 
-//       pipe                               pipe
-// connect <-> lwip_server  lwip_client <- bind_listen
