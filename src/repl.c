@@ -241,15 +241,20 @@ int portforward_func(int argc, char **argv) {
     print_command_usage(argv[0]);
     return 0;
   }
+
   char *src_host = argv[1];
   int src_port = atoi(argv[2]);
   char *dst_host = argv[3];
   int dst_port = atoi(argv[4]);
-  // FORWARD_DYNAMIC_PORT_MAP
-  // FORWARD_DYNAMIC_PORT_MAP
-  port_forward_intent_t *a = new_port_forward_intent(
-      FORWARD_STATIC_PORT_MAP, src_host, src_port, dst_host, dst_port);
+  int forward_type;
+  if (strcmp(argv[0], "remote_listen") == 0) {
+      forward_type = FORWARD_STATIC_PORT_MAP_LISTEN_ON_AGENT;
+  } else {
+      forward_type = FORWARD_STATIC_PORT_MAP;
+  }
 
+  port_forward_intent_t *a = new_port_forward_intent(
+      forward_type, src_host, src_port, dst_host, dst_port);
   send_binary(out, COMMAND_PORT_FORWARD, a, sizeof(file_exchange_intent_t));
   free(a);
 
@@ -388,7 +393,14 @@ actionfinder_t action_table[] = {
     //    {"ping", ping_func, ""},
     //    {"ping_counter", ping_counter_func, ""},
     //    {"test", test_func, "debug"},
-    {"port", portforward_func, "port forward bind", "usage"},
+    {"local_listen", portforward_func, "port forward bind on local host",
+      "local_listen [local_host] [local_port] [remote_host] [remote_port]\n"
+      "when remote_port==0, the service listen on remote_port will be a socks5."
+    },
+    {"remote_listen", portforward_func, "port forward bind on remote host",
+      "remote_listen [remote_host] [remote_port] [local_host] [local_port]\n"
+      "when local_port==0, the service listen on remote_port  will be a socks5."
+    },
     {"upload", upload_func, "upload a file", "usage"},
     {"rz", upload_func, "alias upload", "usage"},
     {"download", download_func, "download a file", "usage"},
@@ -532,7 +544,6 @@ void interact_run(int _in, int _out) {
         }
         default: {
           CHECK(0, "repl error\n");
-          abort();
         }
       }
       if (buf) {

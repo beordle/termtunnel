@@ -36,36 +36,25 @@ typedef struct path_exchange {
 } path_exchange_t;
 
 static int file_receiver_request(void *p) {
-  int sd = (int)p;
+  int sd = *(int*)p;
   set_vnet_socket_nodelay(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
   log_info("sd: %d", sd);
-  int readbytes = 0;
-
-  do {
-    n = lwip_read(sd, recv_buf + readbytes, 1);
-    if (n <= 0) {
-      lwip_close(sd);
-      log_info("error stream");
-      return -1;
-    }
-    readbytes += 1;
-  } while (*(recv_buf + readbytes - 1) != '\0');
-
+  if (vnet_readstring(sd, recv_buf, READ_CHUNK_SIZE) == 0) {
+    close(sd);
+    return 0;
+  }
   char *target_file_path = recv_buf;
   log_info("target_file %s", target_file_path);
   int f = open(target_file_path, O_CREAT | O_RDWR, 0600);
   log_info("fd %d", f);
-  // n = lwip_read(sd, recv_buf, RECV_BUF_SIZE)
   while (true) {
     log_info("file_receiver_request read");
-    /* read a max of RECV_BUF_SIZE bytes from socket */
     if ((n = lwip_read(sd, recv_buf, READ_CHUNK_SIZE)) < 0) {
       log_error("read error");
       break;
     }
-    /* break if client closed connectxion */
     if (n == 0) {
       log_error("read eof");
       break;
@@ -87,22 +76,14 @@ int file_receiver_start() {
 }
 
 static int file_sender_request(void *p) {
-  int sd = (int)p;
+  int sd = *(int*)p;
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
   log_info("sd: %d", sd);
-
-  int readbytes = 0;
-  do {
-    n = lwip_read(sd, recv_buf + readbytes, 1);
-    if (n <= 0) {
-      lwip_close(sd);
-      log_info("error stream");
-      return -1;
-    }
-    readbytes += 1;
-  } while (*(recv_buf + readbytes - 1) != '\0');
-
+  if (vnet_readstring(sd, recv_buf, READ_CHUNK_SIZE) == 0) {
+    close(sd);
+    return 0;
+  }
   char *target_file_path = recv_buf;
   log_info("target_file %s", target_file_path);
   int f = open(target_file_path, O_RDONLY);

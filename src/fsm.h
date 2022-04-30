@@ -5,8 +5,8 @@
  * https://opensource.org/licenses/MIT
  */
 
-#ifndef LOULOU_FSM_H
-#define LOULOU_FSM_H
+#ifndef TERMTUNNEL_FSM_H
+#define TERMTUNNEL_FSM_H
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>

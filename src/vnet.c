@@ -35,7 +35,7 @@
 #include "fileexchange.h"
 #include "portforward.h"
 #include "socksproxy.h"
-
+#include "agentcall.h"
 // TODO: 都固定为相同 ip，如果 ip 不同，这里 arp 将不匹配，暂时没有去分析原因。
 char *agent_ip = "192.168.1.111";
 char *server_ip = "192.168.1.111";
@@ -58,6 +58,43 @@ struct lwip_sockaddr_in {
 #define SIN_ZERO_LEN 8
   char sin_zero[SIN_ZERO_LEN];
 };
+
+
+
+int vnet_readstring(int fd, char *buf, int bufsize) {
+  int readbytes = 0;
+  do {
+      int n = lwip_read(fd, buf + readbytes, 1);
+      if (errno == EINTR || errno == EAGAIN) {
+        continue;
+      }
+      if (n <= 0) {
+        return 0;
+      }
+      readbytes += 1;
+    } while (*(buf + readbytes - 1) != '\0' && readbytes < bufsize);
+    return readbytes;
+}
+
+int vnet_readn(int fd, void *buf, int n) {
+  int nread, left = n;
+  while (left > 0) {
+    if ((nread = lwip_read(fd, buf, left)) == -1) {
+      if (errno == EINTR || errno == EAGAIN) {
+        continue;
+      }
+    } else {
+      if (nread == 0) {
+        return 0;
+      } else {
+        left -= nread;
+        buf += nread;
+      }
+    }
+  }
+  return n;
+}
+
 
 int vnet_listen_at(uint16_t port, void *cb, char* thread_desc) {
   int sock, new_sd;
@@ -102,13 +139,11 @@ int vnet_tcp_connect(uint16_t port) {
   addr.sin_addr.s_addr = inet_addr(server_ip);
   set_vnet_socket_nodelay(s);
   /* connect */
-  log_info("start connect");
   int ret = lwip_connect(s, (struct sockaddr *)&addr, sizeof(addr));
   if (ret == 0) {
-    log_info("connect succ return fd %d", ret);
     return s;
   }
-  log_info("connect failed");
+  log_error("connect failed %d", ret);
   return ret;
 }
 
@@ -255,6 +290,8 @@ void *vnet_init(callback_t cb) {
       sys_thread_new("file_receiver", file_receiver_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
       sys_thread_new("file_sender", file_sender_start, NULL,
+                   DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
+      sys_thread_new("agentcall_server", agentcall_server_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
   }
   sys_thread_new("portforward_static_server",

@@ -54,5 +54,6 @@ typedef struct {
 
 #define FORWARD_DYNAMIC_PORT_MAP 2
 #define FORWARD_STATIC_PORT_MAP 3
+#define FORWARD_STATIC_PORT_MAP_LISTEN_ON_AGENT 4
 
 #endif

@@ -17,7 +17,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+#include "state.h"
 #include "intent.h"
 #include "log.h"
 #include "lwip/api.h"
@@ -46,7 +46,7 @@ typedef struct port_listen {
 } port_listen_t;
 
 static void portforward_static_server_request(void *p) {
-  int sd = (int)p;
+  int sd = *(int*)p;
   set_vnet_socket_nodelay(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
@@ -276,15 +276,21 @@ int portforward_static_start(char *src_host, uint16_t src_port, char *dst_host,
   int ret = bind(sock, (struct sockaddr *)&address, sizeof(address));
   if (ret != 0) {
     log_error("bind local port error\n");
-    comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind local port error\n"),
-                             sizeof("bind local port error\n"));
+    if (get_state_mode() != MODE_AGENT_PROCESS) {
+      // TODO(jdz) agent监听模式，cli暂时无法获取结果
+      comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind local port error\n"),
+                              sizeof("bind local port error\n"));
+    }
     return 0;
   }
   ret = listen(sock, 20);
   if (ret != 0) {
     log_error("listen error");
-    comm_write_packet_to_cli(COMMAND_RETURN, strdup("listen error\n"),
+    if (get_state_mode() != MODE_AGENT_PROCESS) {
+       // TODO(jdz) agent监听模式，cli暂时无法获取结果
+      comm_write_packet_to_cli(COMMAND_RETURN, strdup("listen error\n"),
                              sizeof("listen error\n"));
+    }
     return 0;
   }
 
@@ -293,8 +299,12 @@ int portforward_static_start(char *src_host, uint16_t src_port, char *dst_host,
   pe->port = dst_port;
   pe->local_fd = sock;
   log_debug("portforward_static_start");
-  comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind local port done\n"),
-                           sizeof("bind local port done\n"));
+  if (get_state_mode() != MODE_AGENT_PROCESS) {
+    comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind local port done\n"),
+                           sizeof("bind local port done\n"));  
+                           // TODO(jdz) agent监听模式，cli暂时无法获取结果
+  }
+
   sys_thread_new("portforward_static", portforward_service_handler, (void *)pe,
                  DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
   return 0;

@@ -27,6 +27,7 @@
 #include <uv.h>
 
 #include "agent.h"
+#include "agentcall.h"
 #include "config.h"
 #include "fileexchange.h"
 #include "fsm.h"
@@ -35,14 +36,13 @@
 #include "portforward.h"
 #include "pty.h"
 #include "repl.h"
-#include "thirdparty/setproctitle.h"
 #include "state.h"
 #include "thirdparty/base64.h"
 #include "thirdparty/queue/queue.h"
 #include "thirdparty/queue/queue_internal.h"
+#include "thirdparty/setproctitle.h"
 #include "utils.h"
 #include "vnet.h"
-
 static uv_pipe_t in_pipe;
 static uv_pipe_t out_pipe;
 
@@ -308,15 +308,10 @@ static void common_read_data_from_cli(uv_stream_t *stream, ssize_t nread,
     if (nread != UV_EOF) {
       CHECK(nread == UV_EOF, "read_cb");
     }
-
     // free(buf);
-    // sleep(1000000);
-    log_info("common_read_data_from_cli end");
     uv_read_stop(stream);
     return;
   } else if (nread > 0) {
-    // printf("444\n");
-    log_debug("common_read_data_from_cli end");
     parser(buf->base, nread);
   }
 
@@ -405,7 +400,7 @@ void timer_callback() {
 
   if (exiting) {
     log_info("exit\n");
-    exit(0);
+    exit(EXIT_SUCCESS);
   }
 }
 
@@ -588,22 +583,29 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
     }
     case COMMAND_PORT_FORWARD: {
       port_forward_intent_t *a = (port_forward_intent_t *)buf;
-      log_info("portforward %s:%hu <-> %s:%hu\n", a->src_host, a->src_port,
+      log_info("portforward %s:%hu <-> %s:%hu", a->src_host, a->src_port,
                a->dst_host, a->dst_port);
       if (a->forward_type == FORWARD_DYNAMIC_PORT_MAP) {
         // portforward_st(a->src_path, a->dst_path);
-      } else if (a->forward_type == FORWARD_STATIC_PORT_MAP)  // TODO
+      } else if (a->forward_type == FORWARD_STATIC_PORT_MAP)  // TODO(jdz)
       {
         portforward_static_start(a->src_host, a->src_port, a->dst_host,
                                  a->dst_port);
+      } else if (a->forward_type == FORWARD_STATIC_PORT_MAP_LISTEN_ON_AGENT) {
+        log_info("remote mode");
+        char buf[READ_CHUNK_SIZE];
+        snprintf(buf, READ_CHUNK_SIZE, "%s:%hu:%s:%hu",
+            a->src_host, a->src_port, a->dst_host, a->dst_port);
+        server_call_agent(METHOD_CALL_FORWARD_STATIC, buf);
+        comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind done (guess)\n"),
+                              sizeof("bind done (guess)\n"));
       }
 
       break;
     }
 
     default: {
-      log_error("server_handle_packet unknown type %d\n", type);
-      exit(EXIT_FAILURE);
+      log_error("server_handle_packet unknown type %d", type);
     }
   }
   return;
