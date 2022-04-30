@@ -222,9 +222,7 @@ void portforward_static_server_pipe(port_listen_t *pe) {
 }
 
 void portforward_transparent_server_pipe(port_listen_t *pe) {
-  log_info("connect 1080");
   int lwip_fd = vnet_tcp_connect(socks5_port);
-
   pipe_lwip_socket_and_socket_pair(lwip_fd, pe->local_fd);
   free(pe);
   close(pe->local_fd);

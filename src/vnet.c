@@ -49,9 +49,19 @@ void set_vnet_socket_nodelay(int nfd) {
 }
 
 
-int vnet_listen_at(uint16_t port, void *cb,char* thread_desc) {
+
+struct lwip_sockaddr_in {
+  uint8_t sin_len;
+  uint8_t sin_family;
+  uint16_t sin_port;
+  struct in_addr sin_addr;
+#define SIN_ZERO_LEN 8
+  char sin_zero[SIN_ZERO_LEN];
+};
+
+int vnet_listen_at(uint16_t port, void *cb, char* thread_desc) {
   int sock, new_sd;
-  struct sockaddr_in address, remote;
+  struct lwip_sockaddr_in address, remote;
   int size;
   int ret;
 
@@ -71,7 +81,7 @@ int vnet_listen_at(uint16_t port, void *cb,char* thread_desc) {
     if ((new_sd = lwip_accept(sock, (struct sockaddr *)&remote, (socklen_t *)&size)) >= 0) {
       log_info("new tcp");
       sys_thread_new(thread_desc, cb,
-                     (void *)new_sd, DEFAULT_THREAD_STACKSIZE,
+                     (void *)&new_sd, DEFAULT_THREAD_STACKSIZE,
                      DEFAULT_THREAD_PRIO);
     } else {
       log_info("abort %d %d %s", new_sd, errno, strerror(errno));
