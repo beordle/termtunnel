@@ -399,7 +399,7 @@ void timer_callback() {
 #endif
 
   if (exiting) {
-    log_info("exit\n");
+    // TODO (jdz）实际上设置exiting的时候，有没有写入成功的可能，因此，最好来说，我们要握手退出)
     exit(EXIT_SUCCESS);
   }
 }

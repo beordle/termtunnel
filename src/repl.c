@@ -6,7 +6,6 @@
  */
 
 #include "repl.h"
-
 #include <assert.h>
 #include <ctype.h>
 #include <libgen.h>  // basename
