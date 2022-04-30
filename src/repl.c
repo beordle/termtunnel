@@ -518,7 +518,7 @@ void interact_run(int _in, int _out) {
       switch (type) {
         case COMMAND_TTY_PLAIN_DATA:  // output pty data
         {
-          int writtenbytes = write(STDOUT_FILENO, buf, size);
+          int writtenbytes = writen(STDOUT_FILENO, buf, size);
           CHECK(writtenbytes == size, "writtenbytes==size");
           break;
         }

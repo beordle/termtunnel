@@ -170,7 +170,7 @@ int block_write_binary_to_server(const char *buf, size_t size) {
   char *tmp = (char *)malloc(elen + 1);
   tmp[0] = 'B';
   memcpy(tmp + 1, ebuf, elen);
-  write_frame_to_server(tmp, elen + 1);  // TODO async
+  write_frame_to_server(tmp, elen + 1);
 
   free(tmp);
   free(ebuf);

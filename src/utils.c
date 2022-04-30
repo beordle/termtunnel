@@ -17,6 +17,7 @@
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+#include <errno.h>
 //如果仅仅 ~ICANON; ~ECHO
 //那么，我们还是可以通过键盘触发SIGINT，SIGSTOP等信号。此时可以手动选择转发给远端。
 //但是依据ssh，这样设置可以直接将信号转发给远程终端，从而如果我们的程序收到了键盘产生的信号的话，一定是从另一个console中手动kill过来的。
@@ -57,6 +58,26 @@ void *memdup(const void *src, size_t n) {
 }
 
 bool stdin_is_raw() { return _stdin_is_raw; }
+
+int writen(int fd, void *buf, int n) {
+  int nwrite, left = n;
+  while (left > 0) {
+    if ((nwrite = write(fd, buf, left)) == -1) {
+      if (errno == EINTR || errno == EAGAIN) {
+        continue;
+      }
+    } else {
+      if (nwrite == n) {
+        return 0;
+      } else {
+        left -= nwrite;
+        buf += nwrite;
+      }
+    }
+  }
+  return n;
+}
+
 
 void set_stdin_raw() {
   setvbuf(stdout, NULL, _IONBF, 0);

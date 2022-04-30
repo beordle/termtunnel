@@ -322,6 +322,7 @@ static void common_read_data_from_cli(uv_stream_t *stream, ssize_t nread,
 
 // 快速、及时发送给 console
 void send_tty_to_client(char *buf, int nread) {
+  // 这里的拆分是有原因的，首先，如果生产的速度单次过快，即TTY_WATERMARK过大从而一次写入几万字节，cli标准输出的终端也会来不及处理从而阻塞在write中，此时我们没有办法及时接收对于键盘的响应（尤其是ctrl+c，此时ctrl+c已经不会由本地tty解释为中断，而是等待写入server持有的外部程序的tty），
   int rest = nread;
   int block = 512;  // TODO magic number
   while (rest > 0) {
@@ -361,7 +362,7 @@ static void common_read_tty(uv_stream_t *stream, ssize_t nread,
     }
     fsm_append_input(global_fsm_context, buf->base, nread);
     fsm_run(global_fsm_context);
-    // TODO:可能因为窗口导致2000不够用
+    // TODO:可能因为单frame过大导致2000不够用
     char *dst = (char *)malloc(2000);
     int sz = 0;
     while (true) {
@@ -443,13 +444,12 @@ void background_loop(int in, int out, int argc, const char *argv[]) {
 
   uv_pipe_init(loop, &in_pipe, 0);
   uv_pipe_init(loop, &out_pipe, 0);
-  log_info("%d %d", in, out);
+  log_info("in:%d out:%d", in, out);
   uv_pipe_open(&in_pipe, in);
   uv_pipe_open(&out_pipe, out);
   write_client_pipe = &out_pipe;
   uv_read_start((uv_stream_t *)&in_pipe, alloc_buffer,
                 common_read_data_from_cli);
-  log_info("server6");
   const int UV_HANDLE_BLOCKING_WRITES = 0x00100000;
 
   int fd = get_pty_fd();

@@ -77,7 +77,7 @@ int readn(int fd, void *buf, int n) {
   return n;
 }
 
-int writen(int fd, void *buf, int n) {
+static int writen(int fd, void *buf, int n) {
   int nwrite, left = n;
   while (left > 0) {
     if ((nwrite = lwip_write(fd, buf, left)) == -1) {

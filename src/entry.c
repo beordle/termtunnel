@@ -85,7 +85,7 @@ int main(int argc, const char *argv[]) {
 #ifdef ENABLE_CREASH_HELPER
   void *array[10];
   size_t size = backtrace(array, 10);  // 提前触发 dlopen
-  crash_fd = open("TERMTUNNEL_crash.log", O_APPEND);
+  crash_fd = open("termtunnel_crash.log", O_APPEND);
   signal(SIGSEGV, handler);
   signal(SIGPIPE, handler);
   signal(SIGILL, handler);

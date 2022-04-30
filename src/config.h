@@ -13,6 +13,5 @@
 #define TIMEOUT_MS 1000
 #define REPEAT_MS 100
 #define TTY_WATERMARK 100
-//#define ENABLE_CREASH_HELPER
 
 #endif

@@ -16,10 +16,10 @@
     log_fatal(__VA_ARGS__); \
     exit(0);                \
   }
-// ALLOC_CHECK(ptr != NULL, "Pointer not initialized");
 
-void set_stdin_raw();
-void restore_stdin();
-void *memdup(const void *src, size_t n);
-const char *green_encode(const char *buf, int len, int *result_len);
+extern int writen(int fd, void *buf, int n);
+extern void set_stdin_raw();
+extern void restore_stdin();
+extern void *memdup(const void *src, size_t n);
+extern const char *green_encode(const char *buf, int len, int *result_len);
 #endif
