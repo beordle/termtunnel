@@ -206,11 +206,11 @@ a lot of data that needs to be copied, this should be set high. */
 #endif
 
 /* ---------- UDP options ---------- */
-#define LWIP_UDP 1
+#define LWIP_UDP 0
 #define UDP_TTL 255
 
 /* ---------- RAW options ---------- */
-#define LWIP_RAW 1
+#define LWIP_RAW 0
 #define RAW_TTL 255
 
 /* ---------- Statistics options ---------- */
