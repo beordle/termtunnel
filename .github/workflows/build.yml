@@ -1,0 +1,220 @@
+name: Termtunnel
+
+env:
+  BUILD_TYPE: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'     
+        required: true
+        default: '1.0'
+  push:
+    tags:
+      - '*'
+jobs:
+  create_release:
+    name: Create release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d-%H-%M-%S')"
+      - name: Test with environment variables
+        run: echo $TAG_NAME - $RELEASE_NAME
+        env:
+          TAG_NAME: nightly-tag-${{ steps.date.outputs.date }}
+          RELEASE_NAME: nightly-release-${{ steps.date.outputs.date }}
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.date.outputs.date }}
+          release_name: ${{ steps.date.outputs.date }}
+          body: |
+                ${{ github.event.head_commit.message }}
+          #draft: false
+          #prerelease: true
+      - id: step_upload_url
+        run: echo "::set-output name=upload_url::${{ steps.create_release.outputs.upload_url }}"
+
+  create_linux_amd64_static_release:
+    needs: create_release
+    name: Create static linux amd64 release
+    runs-on: ubuntu-latest
+    env:
+      CC: /opt/x86_64-linux-musl-native/bin/x86_64-linux-musl-gcc 
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Build
+      run: |
+        curl -O http://musl.cc/x86_64-linux-musl-native.tgz
+        tar xzf x86_64-linux-musl-native.tgz -C /opt
+        cmake .
+        make
+        mv termtunnel termtunnel-linux-amd64
+        tar -czf termtunnel-linux-amd64.tar.gz termtunnel-linux-amd64
+        
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with: 
+        name: termtunnel-linux-amd64
+        path: termtunnel-linux-amd64
+    - name: Upload Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: termtunnel-linux-amd64.tar.gz
+        asset_name: termtunnel-linux-amd64.tar.gz
+        asset_content_type: application/octet-stream
+
+  create_linux_i686_static_release:
+    needs: create_release
+    name: Create static linux i686 release
+    runs-on: ubuntu-latest
+    env:
+      CC: /opt/i686-linux-musl-native/bin/i686-linux-musl-gcc 
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Build
+      run: |
+        curl -O http://musl.cc/i686-linux-musl-native.tgz
+        tar xzf i686-linux-musl-native.tgz -C /opt
+        sudo apt install -y gcc-multilib
+        cmake .
+        make CFLAGS="-m32"
+        mv termtunnel termtunnel-linux-i686
+        tar -czf termtunnel-linux-i686.tar.gz termtunnel-linux-i686
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with: 
+        name: termtunnel-linux-i686
+        path: termtunnel-linux-i686
+    - name: Upload Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: termtunnel-linux-i686.tar.gz
+        asset_name: termtunnel-linux-i686.tar.gz
+        asset_content_type: application/octet-stream
+        
+  create_darwin_amd64_static_release:
+    needs: create_release
+    runs-on: macos-latest
+    name: Create darwin amd64 release
+    steps:
+    - name: Install external dependencies with homebrew
+      run: |
+        brew install cmake make gcc
+    - name: Clone repository
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Build
+      run: |
+        cmake .
+        make
+        mv termtunnel termtunnel-darwin-amd64
+        zip termtunnel-darwin-amd64.zip termtunnel-darwin-amd64
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with: 
+        name: termtunnel-darwin-amd64
+        path: termtunnel-darwin-amd64
+    - name: Upload Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: termtunnel-darwin-amd64.zip
+        asset_name: termtunnel-darwin-amd64.zip
+        asset_content_type: application/octet-stream
+        
+  create_linux_aarch64_static_release:
+    needs: create_release
+    name: Create static linux aarch64 release
+    runs-on: ubuntu-18.04
+    env:
+      CC: /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc 
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Prepare cross-compiler
+      run: |
+        curl -O http://musl.cc/aarch64-linux-musl-cross.tgz
+        tar xzf aarch64-linux-musl-cross.tgz -C /opt
+    - run: /opt/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc --version
+    - name: Build
+      run: |
+        cmake .
+        make
+        mv termtunnel termtunnel-linux-aarch64
+        tar -czf termtunnel-linux-aarch64.tar.gz termtunnel-linux-aarch64
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with: 
+        name: termtunnel-linux-aarch64
+        path: termtunnel-linux-aarch64
+    - name: Upload Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: termtunnel-linux-aarch64.tar.gz
+        asset_name: termtunnel-linux-aarch64.tar.gz
+        asset_content_type: application/octet-stream
+
+  create_linux_arm_static_release:
+    needs: create_release
+    name: Create static linux armeabi release
+    runs-on: ubuntu-18.04
+    env:  
+      CC: /opt/arm-linux-musleabi-cross/bin/arm-linux-musleabi-gcc 
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Prepare cross-compiler
+      run: |
+        curl -O http://musl.cc/arm-linux-musleabi-cross.tgz
+        tar xzf arm-linux-musleabi-cross.tgz -C /opt
+    - run: /opt/arm-linux-musleabi-cross/bin/arm-linux-musleabi-gcc --version
+    - name: Build
+      run: |
+        cmake .
+        make
+        mv termtunnel termtunnel-linux-armeabi
+        tar -czf termtunnel-linux-armeabi.tar.gz termtunnel-linux-armeabi
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with: 
+        name: termtunnel-linux-armeabi
+        path: termtunnel-linux-armeabi
+    - name: Upload Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: termtunnel-linux-armeabi.tar.gz
+        asset_name: termtunnel-linux-armeabi.tar.gz
+        asset_content_type: application/octet-stream
+
