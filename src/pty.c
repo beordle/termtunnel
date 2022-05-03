@@ -47,10 +47,8 @@ int get_pty_fd() { return pty_fd; }
 
 static int do_exec(const char *name, int ptypt, char **argv, int argc) {
   struct winsize ttysize;
-  if (ioctl(myself_fd, TIOCGWINSZ, &ttysize) == 0) {
-    // pass
-    // sleep(5);
-  } else {
+  if (ioctl(myself_fd, TIOCGWINSZ, &ttysize) != 0) {
+    // fallback
     ttysize.ws_col = 20;
     ttysize.ws_row = 20;
     ttysize.ws_xpixel = 0;
@@ -69,15 +67,15 @@ static int do_exec(const char *name, int ptypt, char **argv, int argc) {
   int slavept = open(name, O_RDWR);
 
   if (slavept < 0) {
-    printf("open slave error\n");
+    fprintf(stderr, "open slave error\n");
     exit(EXIT_FAILURE);
   }
 
   ioctl(slavept, TIOCSWINSZ, &ttysize);
+
   close(0);
   close(1);
   close(2);
-
   dup2(slavept, 0);
   dup2(slavept, 1);
   dup2(slavept, 2);
@@ -85,15 +83,14 @@ static int do_exec(const char *name, int ptypt, char **argv, int argc) {
   close(slavept);
   close(pty_fd);
 
-  int fdlimit = (int)sysconf(_SC_OPEN_MAX);
+  int32_t fdlimit = (int32_t)sysconf(_SC_OPEN_MAX);
   for (int i = STDERR_FILENO + 1; i < fdlimit; i++) {
     close(i);
   }
-
-  execvp(new_argv[0], new_argv);  //不会传递环境变量
+  //unsetenv("TERMTUNNEL_VERBOSE");
+  execvp(new_argv[0], new_argv);
   fprintf(stderr, "%s: %s\n", new_argv[0], strerror(errno));
   exit(EXIT_FAILURE);
-  // printf("kkk2k\n");
   return 0;
 }
 

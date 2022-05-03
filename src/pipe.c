@@ -362,11 +362,10 @@ static void common_read_tty(uv_stream_t *stream, ssize_t nread,
     }
     fsm_append_input(global_fsm_context, buf->base, nread);
     fsm_run(global_fsm_context);
-    // TODO:可能因为单frame过大导致2000不够用
-    char *dst = (char *)malloc(2000);
+    char *dst = (char *)malloc(5 * VIR_MTU);
     int sz = 0;
     while (true) {
-      sz = fsm_pop_output(global_fsm_context, dst, 2000);
+      sz = fsm_pop_output(global_fsm_context, dst, 5 * VIR_MTU);
       if (sz > 0) {
         server_handle_green_packet(dst, sz);
       } else {

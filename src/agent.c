@@ -26,10 +26,14 @@ static struct termios ttystate_backup;
 uv_tty_t agent_stdout_tty;
 uv_tty_t agent_stdin_tty;
 static int64_t pending_send = 0;  //记录待转发的字节，用于tty 流控
+int max_suggested_size = 10240;
 void agent_read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
 
 static void alloc_buffer(uv_handle_t *handle, size_t suggested_size,
                          uv_buf_t *buf) {
+  if (suggested_size > max_suggested_size) {
+    suggested_size = max_suggested_size;
+  }
   buf->base = (char *)malloc(suggested_size);
   buf->len = suggested_size;
 }
@@ -137,20 +141,19 @@ void agent_read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     }
 
     static char *data = NULL;
-    // TODO 动态大小
     if (data == NULL) {
-      data = (char *)malloc(9999);
+      data = (char *)malloc(2 * max_suggested_size);
     }
     static int data_size = 0;
-    CHECK(nread < 9999, "nread<9999");
+    CHECK(nread < max_suggested_size, "nread<2*max_suggested_size");
     memcpy(data + data_size, buf->base, nread);
     data_size += nread;
-    CHECK(data_size < 9999, "data_size>=9999");
+    CHECK(data_size < max_suggested_size, "data_size>=max_suggested_size");
 
     int used_data_size = process_stdin(data, data_size);
     int unused_data_size = data_size - used_data_size;
     if (unused_data_size > 0) {
-      CHECK(unused_data_size < 9999, "erorr");
+      CHECK(unused_data_size < max_suggested_size, "erorr");
       memmove(data, data + used_data_size, unused_data_size);
     }
     data_size = unused_data_size;
