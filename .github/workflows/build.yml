@@ -35,8 +35,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.date.outputs.date }}
-          release_name: ${{ steps.date.outputs.date }}
+          tag_name: version-${{ github.event.inputs.version }}
+          release_name: Termtunnel version ${{ github.event.inputs.version }}
           body: |
                 ${{ github.event.head_commit.message }}
           #draft: false
@@ -75,7 +75,7 @@ jobs:
       with:
         upload_url: ${{ needs.create_release.outputs.upload_url }}
         asset_path: termtunnel-linux-amd64.tar.gz
-        asset_name: termtunnel-linux-amd64.tar.gz
+        asset_name: termtunnel-${{ github.event.inputs.version }}-linux-amd64.tar.gz
         asset_content_type: application/octet-stream
 
   create_linux_i686_static_release:
@@ -110,7 +110,7 @@ jobs:
       with:
         upload_url: ${{ needs.create_release.outputs.upload_url }}
         asset_path: termtunnel-linux-i686.tar.gz
-        asset_name: termtunnel-linux-i686.tar.gz
+        asset_name: termtunnel-${{ github.event.inputs.version }}-linux-i686.tar.gz
         asset_content_type: application/octet-stream
         
   create_darwin_amd64_static_release:
@@ -143,7 +143,7 @@ jobs:
       with:
         upload_url: ${{ needs.create_release.outputs.upload_url }}
         asset_path: termtunnel-darwin-amd64.zip
-        asset_name: termtunnel-darwin-amd64.zip
+        asset_name: termtunnel-${{ github.event.inputs.version }}-darwin-amd64.zip
         asset_content_type: application/octet-stream
         
   create_linux_aarch64_static_release:
@@ -179,7 +179,7 @@ jobs:
       with:
         upload_url: ${{ needs.create_release.outputs.upload_url }}
         asset_path: termtunnel-linux-aarch64.tar.gz
-        asset_name: termtunnel-linux-aarch64.tar.gz
+        asset_name: termtunnel-${{ github.event.inputs.version }}-linux-aarch64.tar.gz
         asset_content_type: application/octet-stream
 
   create_linux_arm_static_release:
@@ -215,6 +215,6 @@ jobs:
       with:
         upload_url: ${{ needs.create_release.outputs.upload_url }}
         asset_path: termtunnel-linux-armeabi.tar.gz
-        asset_name: termtunnel-linux-armeabi.tar.gz
+        asset_name: termtunnel-${{ github.event.inputs.version }}-linux-armeabi.tar.gz
         asset_content_type: application/octet-stream
 
