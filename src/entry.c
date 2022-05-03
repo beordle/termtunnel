@@ -93,8 +93,8 @@ int main(int argc, const char *argv[]) {
 #endif
 
   log_set_quiet(true);
-  char *verbose_env_str = getenv("VERBOSE");
-  if (getenv("VERBOSE") != NULL) {
+  char *verbose_env_str = getenv("TERMTUNNEL_VERBOSE");
+  if (verbose_env_str != NULL) {
     int verbose_level = atoi(verbose_env_str);
     if (verbose_level < 0 || verbose_level > 9) {
       verbose_level = 0;

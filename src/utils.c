@@ -60,19 +60,16 @@ void *memdup(const void *src, size_t n) {
 bool stdin_is_raw() { return _stdin_is_raw; }
 
 int writen(int fd, void *buf, int n) {
-  int nwrite, left = n;
+  int nwrite = 0;
+  int left = n;
   while (left > 0) {
     if ((nwrite = write(fd, buf, left)) == -1) {
       if (errno == EINTR || errno == EAGAIN) {
         continue;
       }
     } else {
-      if (nwrite == n) {
-        return 0;
-      } else {
         left -= nwrite;
         buf += nwrite;
-      }
     }
   }
   return n;

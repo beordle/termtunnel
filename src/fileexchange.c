@@ -148,16 +148,6 @@ static int file_send_request(path_exchange_t *pe) {
   return 0;
 }
 
-#if 0
-// from libuv
-void exchange_notify_handler(uv_async_t *handle)
-{
-    log_info("exchange_notify_handler\n");
-    //comm_write_packet_to_cli(COMMAND_TTY_PING, NULL, 0);
-    return;
-}
-#endif 0
-
 int file_send_start(char *src_path, char *dst_path) {
   path_exchange_t *pe = (path_exchange_t *)malloc(sizeof(path_exchange_t));
   strcpy(pe->src_path, src_path);
