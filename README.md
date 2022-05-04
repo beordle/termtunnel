@@ -38,7 +38,7 @@ termtunnel>> help
 
 * MacOS
   * `brew install beordle/tap/termtunnel`
-* Windows (binary not always up to date)
+* Windows
   * Provide prebuilt binaries to run. [Download](https://github.com/beordle/termtunnel/releases/download/windows/termtunnel.zip) 
  
 ## Working principle
