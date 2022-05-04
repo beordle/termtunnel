@@ -34,11 +34,13 @@ termtunnel>> help
 
 ## Install
 * Linux
-   * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
+  * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
 
 * MacOS
-   * `brew install beordle/tap/termtunnel`
-
+  * `brew install beordle/tap/termtunnel`
+* Windows (binary not always up to date)
+  * Provide prebuilt binaries to run. [Download](https://github.com/beordle/termtunnel/releases/download/windows/termtunnel.zip) 
+ 
 ## Working principle
 
 As you can imagine, we use the method of tapping the string to upload a message to the remote in terminal, and then get a message back from the remote, and in this way, we get a point-to-point transmission channel.
@@ -76,10 +78,20 @@ Termtunnel use pty to control local application, write data to its stdin, and re
 
 
 ## Build from Source
+#### Windows
+> Please use MSYS2 to compile under windows.
+```
+pacman -Syu libuv libuv-devel cmake make 
+pacman -Syu openssh  # optional
+cmake .
+make
+ ```
+#### Other platform 
 ```bash
 cmake .
 make
 ```
+
 
 ## FAQ
 
