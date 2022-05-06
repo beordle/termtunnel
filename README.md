@@ -42,21 +42,6 @@ termtunnel>> help
 * MacOS
    * `brew install beordle/tap/termtunnel`
 
-## Working principle
-
-As you can imagine, we use the method of tapping the string to upload a message to the remote in terminal, and then get a message back from the remote, and in this way, we get a point-to-point transmission channel.
-
-```mermaid
-flowchart LR
-    local(temrtunnel local) <--> ssh
-    ssh <--> sshd
-    sshd <--> bash
-    bash <--> remote(termtunnel remote)
-```
-
-Termtunnel use pty to control local application, write data to its stdin, and read data from its stdout. and then the local application stdin and stdout be linked with remote termtunnel.
-
-
 ## Use case
 
 > This documentation may be out of date, please refer to the output of the **help** command  if necessary.
@@ -90,6 +75,21 @@ Termtunnel use pty to control local application, write data to its stdin, and re
 cmake .
 make
 ```
+
+## Working principle
+
+As you can imagine, we use the method of tapping the string to upload a message to the remote in terminal, and then get a message back from the remote, and in this way, we get a point-to-point transmission channel.
+
+```mermaid
+flowchart LR
+    local(temrtunnel local) <--> ssh
+    ssh <--> sshd
+    sshd <--> bash
+    bash <--> remote(termtunnel remote)
+```
+
+Termtunnel use pty to control local application, write data to its stdin, and read data from its stdout. and then the local application stdin and stdout be linked with remote termtunnel.
+
 
 ## FAQ
 
