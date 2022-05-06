@@ -37,13 +37,15 @@ termtunnel>> help
 
 ## Install
 * Linux
-   * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
+  * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
 
 * MacOS
    * `brew install beordle/tap/termtunnel`
-
+   * 
+* Windows
+  * Provide prebuilt binaries to run. [Download](https://github.com/beordle/termtunnel/releases/download/windows/termtunnel.zip) 
+ 
 ## Use case
-
 > This documentation may be out of date, please refer to the output of the **help** command  if necessary.
 
 ### Download a file to local
@@ -71,6 +73,15 @@ termtunnel>> help
 
 
 ## Build from Source
+#### Windows
+> Please use MSYS2 to compile under windows.
+```
+pacman -Syu libuv libuv-devel cmake make 
+pacman -Syu openssh  # optional
+cmake .
+make
+ ```
+#### Other platform 
 ```bash
 cmake .
 make
@@ -89,7 +100,6 @@ flowchart LR
 ```
 
 Termtunnel use pty to control local application, write data to its stdin, and read data from its stdout. and then the local application stdin and stdout be linked with remote termtunnel.
-
 
 ## FAQ
 
