@@ -228,7 +228,7 @@ port_forward_intent_t *new_port_forward_intent(int forward_type, char *src_host,
   port_forward_intent_t *tmp =
       (port_forward_intent_t *)malloc(sizeof(port_forward_intent_t));
   tmp->forward_type = forward_type;
-  strcpy(tmp->src_host, dst_host);
+  strcpy(tmp->src_host, src_host);
   strcpy(tmp->dst_host, dst_host);
   tmp->src_port = src_port;
   tmp->dst_port = dst_port;

@@ -84,7 +84,32 @@ static void portforward_static_server_request(void *p) {
     lwip_close(sd);
     return;
   }
+
+  char portaddr[6];
+  struct addrinfo *res;
+  snprintf(portaddr, sizeof(portaddr), "%d", port);
+  int ret = getaddrinfo(host, portaddr, NULL, &res);
+  if (ret == EAI_NODATA) {
+    close(sock);
+    return;
+  }
+  if (ret == 0) {
+    struct addrinfo *r;
+    for (r = res; r != NULL; r = r->ai_next) {
+      if (r->ai_family == AF_INET) {
+        struct sockaddr_in *addr;
+        addr = (struct sockaddr_in *)r->ai_addr;
+        port = ntohs(addr->sin_port);
+        host = inet_ntoa((struct in_addr)addr->sin_addr);  // TODO(jdz) thread safe
+        log_info("use ip %s:%he for domain", host, port);
+        break;
+      }
+    }
+  }
+  freeaddrinfo(res);
+
   struct sockaddr_in addr;
+
   memset(&addr, 0, sizeof(addr));
 #ifdef __APPLE__
   addr.sin_len = sizeof(addr);
@@ -94,7 +119,7 @@ static void portforward_static_server_request(void *p) {
   addr.sin_addr.s_addr = inet_addr(host);
   /* connect */
   log_info("start connect %s:%hu", host, port);
-  int ret = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+  ret = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
   if (ret != 0) {
     lwip_close(sd);
     log_info("connect error return %d errno:%d %s", ret, errno,
