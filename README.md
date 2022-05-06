@@ -34,7 +34,7 @@ sh-3.2$ >> termtunnel ssh root@19.95.02.23
 root@host:~# /tmp/termsocks -a
 termtunnel>> help
 ```
-[Use case](#use-case) 
+
 ## Install
 * Linux
    * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
