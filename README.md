@@ -52,13 +52,13 @@ termtunnel>> help
 ## Use case
 > This documentation may be out of date, please refer to the output of the **help** command  if necessary.
 
-### Download a file to local
+#### Download a file to local
 > type `download` and Enter, choose a file to download. 
 
 
-### Upload a file to remote
+#### Upload a file to remote
 > type `upload` and Enter, choose a file to upload. 
-### Share local internet with remote
+####  Share local internet with remote
 > type `remote_listen 127.0.0.1 8000 127.0.0.1 0` and enter
  
 > now, the port 8000 is a socks5 proxy server. well, open another windows to use it.
@@ -66,7 +66,7 @@ termtunnel>> help
 > eg. You can use it by curl: `curl --socks5 127.0.0.1:8000 https://google.com`
 > or, [let yum use it.](https://unix.stackexchange.com/questions/43654/how-to-use-socks-proxy-with-yum)
 
-### Share Intranet host 10.11.123.123's VNC port 5100 with local
+#### Share Intranet host 10.11.123.123's VNC port 5100 with local
 > type `local_listen 127.0.0.1 3333 10.11.123.123 5100` and enter
 
 > now, the port 3333 on your local compute is 10.11.123.123's VNC port.
@@ -77,6 +77,13 @@ termtunnel>> help
 
 
 ## Build from Source
+
+#### Linux/MacOS
+```bash
+cmake .
+make
+```
+
 #### Windows
 > Please use MSYS2 to compile under windows.
 ```
@@ -85,12 +92,7 @@ pacman -Syu openssh  # optional
 cmake .
 make
  ```
-#### Other platform 
-```bash
-cmake .
-make
-```
-
+ 
 ## FAQ
 
 1. **Can I make the whole process unattended？** To reduce user intervention, you can try to use UNIX expect tool.
