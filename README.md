@@ -36,36 +36,40 @@ termtunnel>> help
 ```
 
 ## Install
-* Linux
-  * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
 
 * MacOS
    * `brew install beordle/tap/termtunnel`
-   * 
+
+* Linux
+  * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
+
 * Windows
   * Provide prebuilt binaries to run. [Download](https://github.com/beordle/termtunnel/releases/download/windows/termtunnel.zip) 
- 
+
+* Android or iOS
+  * use Termux on Android, iSH on iOS to run Linux binary.
+
 ## Use case
 > This documentation may be out of date, please refer to the output of the **help** command  if necessary.
 
-### Download a file to local
-> type `download` and Enter, choose a file to download. 
+#### Download a file to local
+> type `download path/to/file` and Enter, choose a folder to save.
 
-
-### Upload a file to remote
+#### Upload a file to remote
 > type `upload` and Enter, choose a file to upload. 
-### Share local internet with remote
+
+####  Share local internet with remote
 > type `remote_listen 127.0.0.1 8000 127.0.0.1 0` and enter
  
 > now, the port 8000 is a socks5 proxy server. well, open another windows to use it.
  
-> eg. You can use it by curl: `curl --socks5 127.0.0.1:8333 https://google.com`
+> eg. You can use it by curl: `curl --socks5 127.0.0.1:8000 https://google.com`
 > or, [let yum use it.](https://unix.stackexchange.com/questions/43654/how-to-use-socks-proxy-with-yum)
 
-### Share Intranet host 10.11.123.123's VNC port 5100 with local
-> type `local_listen 127.0.0.1 3333 123.123.123.123 5100` and enter
+#### Share Intranet host 10.11.123.123's VNC port 5100 with local
+> type `local_listen 127.0.0.1 3333 10.11.123.123 5100` and enter
 
-> now, the port 3333 on your local compute is 10.11.123.123 VNC port.
+> now, the port 3333 on your local compute is 10.11.123.123's VNC port.
 
 > use a local GUI VNC client to connect it!
 
@@ -73,6 +77,13 @@ termtunnel>> help
 
 
 ## Build from Source
+
+#### Linux/MacOS
+```bash
+cmake .
+make
+```
+
 #### Windows
 > Please use MSYS2 to compile under windows.
 ```
@@ -81,30 +92,11 @@ pacman -Syu openssh  # optional
 cmake .
 make
  ```
-#### Other platform 
-```bash
-cmake .
-make
-```
-
-## Working principle
-
-As you can imagine, we use the method of tapping the string to upload a message to the remote in terminal, and then get a message back from the remote, and in this way, we get a point-to-point transmission channel.
-
-```mermaid
-flowchart LR
-    local(temrtunnel local) <--> ssh
-    ssh <--> sshd
-    sshd <--> bash
-    bash <--> remote(termtunnel remote)
-```
-
-Termtunnel use pty to control local application, write data to its stdin, and read data from its stdout. and then the local application stdin and stdout be linked with remote termtunnel.
-
+ 
 ## FAQ
 
 1. **Can I make the whole process unattended？** To reduce user intervention, you can try to use UNIX expect tool.
 2. **How to use it with tmux？** Out of the box. Designed with tmux in mind. But because of the implementation of tmux, the speed is very limited. If you want to improve the speed, you need to modify the source code and recompile tmux
-3. **My office network can't connect to apt, and yum, etc, can this program help me？** Yes, use `remote_listen`
+
 ## License
 This application is free software; you can redistribute it and/or modify it under the terms of the MIT license. See LICENSE file for details.
