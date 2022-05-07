@@ -41,7 +41,7 @@ termtunnel>> help
 
 * MacOS
    * `brew install beordle/tap/termtunnel`
-   * 
+
 * Windows
   * Provide prebuilt binaries to run. [Download](https://github.com/beordle/termtunnel/releases/download/windows/termtunnel.zip) 
  
@@ -59,7 +59,7 @@ termtunnel>> help
  
 > now, the port 8000 is a socks5 proxy server. well, open another windows to use it.
  
-> eg. You can use it by curl: `curl --socks5 127.0.0.1:8333 https://google.com`
+> eg. You can use it by curl: `curl --socks5 127.0.0.1:8000 https://google.com`
 > or, [let yum use it.](https://unix.stackexchange.com/questions/43654/how-to-use-socks-proxy-with-yum)
 
 ### Share Intranet host 10.11.123.123's VNC port 5100 with local
