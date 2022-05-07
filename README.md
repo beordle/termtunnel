@@ -36,15 +36,19 @@ termtunnel>> help
 ```
 
 ## Install
-* Linux
-  * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
 
 * MacOS
    * `brew install beordle/tap/termtunnel`
 
+* Linux
+  * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
+
 * Windows
   * Provide prebuilt binaries to run. [Download](https://github.com/beordle/termtunnel/releases/download/windows/termtunnel.zip) 
- 
+
+* Android or iOS
+  * use Termux on Android, iSH on iOS to run Linux binary.
+
 ## Use case
 > This documentation may be out of date, please refer to the output of the **help** command  if necessary.
 
@@ -63,9 +67,9 @@ termtunnel>> help
 > or, [let yum use it.](https://unix.stackexchange.com/questions/43654/how-to-use-socks-proxy-with-yum)
 
 ### Share Intranet host 10.11.123.123's VNC port 5100 with local
-> type `local_listen 127.0.0.1 3333 123.123.123.123 5100` and enter
+> type `local_listen 127.0.0.1 3333 10.11.123.123 5100` and enter
 
-> now, the port 3333 on your local compute is 10.11.123.123 VNC port.
+> now, the port 3333 on your local compute is 10.11.123.123's VNC port.
 
 > use a local GUI VNC client to connect it!
 
@@ -105,6 +109,6 @@ Termtunnel use pty to control local application, write data to its stdin, and re
 
 1. **Can I make the whole process unattended？** To reduce user intervention, you can try to use UNIX expect tool.
 2. **How to use it with tmux？** Out of the box. Designed with tmux in mind. But because of the implementation of tmux, the speed is very limited. If you want to improve the speed, you need to modify the source code and recompile tmux
-3. **My office network can't connect to apt, and yum, etc, can this program help me？** Yes, use `remote_listen`
+
 ## License
 This application is free software; you can redistribute it and/or modify it under the terms of the MIT license. See LICENSE file for details.
