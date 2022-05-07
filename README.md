@@ -91,20 +91,6 @@ cmake .
 make
 ```
 
-## Working principle
-
-As you can imagine, we use the method of tapping the string to upload a message to the remote in terminal, and then get a message back from the remote, and in this way, we get a point-to-point transmission channel.
-
-```mermaid
-flowchart LR
-    local(temrtunnel local) <--> ssh
-    ssh <--> sshd
-    sshd <--> bash
-    bash <--> remote(termtunnel remote)
-```
-
-Termtunnel use pty to control local application, write data to its stdin, and read data from its stdout. and then the local application stdin and stdout be linked with remote termtunnel.
-
 ## FAQ
 
 1. **Can I make the whole process unattended？** To reduce user intervention, you can try to use UNIX expect tool.
