@@ -53,11 +53,11 @@ termtunnel>> help
 > This documentation may be out of date, please refer to the output of the **help** command  if necessary.
 
 #### Download a file to local
-> type `download` and Enter, choose a file to download. 
-
+> type `download path/to/file` and Enter, choose a folder to save.
 
 #### Upload a file to remote
 > type `upload` and Enter, choose a file to upload. 
+
 ####  Share local internet with remote
 > type `remote_listen 127.0.0.1 8000 127.0.0.1 0` and enter
  
