@@ -4,7 +4,7 @@
  * This software is released under the MIT License.
  * https://opensource.org/licenses/MIT
  */
-#define ENABLE_CREASH_HELPER
+//#define ENABLE_CREASH_HELPER
 #include <assert.h>
 #include <fcntl.h>
 #include <getopt.h>

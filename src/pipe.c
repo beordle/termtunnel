@@ -559,8 +559,6 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
 
     case COMMAND_FILE_EXCHANGE: {
       file_exchange_intent_t *a = (file_exchange_intent_t *)buf;
-      // upload command
-      // forward_agent()
       log_info("server do open file");
       log_info("%s->%s %d\n", a->src_path, a->dst_path, a->trans_mode);
       if (a->trans_mode == TRANS_MODE_RECV_FILE) {
