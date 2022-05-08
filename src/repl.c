@@ -330,6 +330,8 @@ int download_func(int argc, char **argv) {
   file_exchange_intent_t *a =
       new_file_exchange_intent(src, url, TRANS_MODE_RECV_FILE);
 
+  
+  strcat(a->dst_path, "/"); // linux without /
   // TODO macos ok, linux is ok?
   strcat(a->dst_path, bname);
   send_binary(out, COMMAND_FILE_EXCHANGE, a, sizeof(file_exchange_intent_t));
