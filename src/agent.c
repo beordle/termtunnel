@@ -22,6 +22,7 @@
 #include "utils.h"
 #include "uv.h"
 #include "vnet.h"
+#define FLUASH_QUEUE_ON_TIMER
 static struct termios ttystate_backup;
 uv_tty_t agent_stdout_tty;
 uv_tty_t agent_stdin_tty;
@@ -67,9 +68,9 @@ void agent_timer_callback() {
   // uv_aysnc_send:call queue_pop queue_push 的情况，从而导致残留
   if (!queue_empty(q)) {  // data_income_notify.data == 1){
     // clear q
-    log_info("flush");
+    //log_info("flush");
     log_debug("agent_timer_callback useful");
-    int r = uv_async_send(&data_income_notify);
+    push_data();
   }
 #endif
   return;
@@ -164,7 +165,7 @@ void agent_read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
   }
 }
 
-int block_write_binary_to_server(const char *buf, size_t size) {
+int write_binary_to_server(const char *buf, size_t size) {
   // base64
 
   size_t elen = 0;

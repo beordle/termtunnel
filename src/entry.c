@@ -4,7 +4,7 @@
  * This software is released under the MIT License.
  * https://opensource.org/licenses/MIT
  */
-
+#define ENABLE_CREASH_HELPER
 #include <assert.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -86,6 +86,9 @@ int main(int argc, const char *argv[]) {
   void *array[10];
   size_t size = backtrace(array, 10);  // 提前触发 dlopen
   crash_fd = open("termtunnel_crash.log", O_APPEND);
+  if (crash_fd < 0) {
+    printf("crash log open error\n");
+  }
   signal(SIGSEGV, handler);
   signal(SIGPIPE, handler);
   signal(SIGILL, handler);

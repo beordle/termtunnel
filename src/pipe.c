@@ -48,7 +48,9 @@ static uv_pipe_t out_pipe;
 
 uv_async_t *async_process_exit;
 static uv_async_t data_income_notify;
-//#define FLUASH_QUEUE_ON_TIMER
+
+
+#define FLUASH_QUEUE_ON_TIMER
 void send_base64binary_to_agent(const char *buf, size_t size);
 
 bool server_see_agent_is_repl = false;
@@ -114,24 +116,18 @@ void uvloop_process_income(uv_async_t *handle) {
     }
 
     if (get_state_mode() == MODE_SERVER_PROCESS) {
-      // ERROR !!! 需notify到主循环··
-      //  如果阻塞了，就丢了算了。
-      // ERROR
-      // comm_write_packet_to_cli(COMMAND_TTY_PING, NULL, 0);
       if (!server_see_agent_is_repl) {
         return;
       }
       send_base64binary_to_agent(f->buf, f->len);
     } else {
-      // agent
-      //  同理，如果阻塞，就丢了。
-      block_write_binary_to_server(f->buf, f->len);
+      write_binary_to_server(f->buf, f->len);
     }
     free_frame_data(f);
   }
   handle->data = 0;
   queue_unlock_internal(q);
-  // int r = uv_async_send(&data_income_notify);
+  int r = uv_async_send(&data_income_notify);
   return;
 }
 
@@ -146,15 +142,6 @@ int vnet_notify_to_libuv(char *buf, size_t size) {
   return 0;
 }
 
-void TERMTUNNEL_uv_prepare_cb(uv_prepare_t *handle) {
-  if (!queue_empty(q)) {  // data_income_notify.data == 1){
-    // clear q
-    log_info("do flush");
-    uvloop_process_income(NULL);
-    // int r = uv_async_send(&data_income_notify);
-  }
-  return;
-}
 
 int libuv_add_vnet_notify() {
   static bool added = false;
@@ -387,6 +374,11 @@ void find_a_packet(char *buf, ssize_t len) {
                               len - sizeof(int64_t));
 }
 
+int push_data() {
+  data_income_notify.data = 1;
+  return  uv_async_send(&data_income_notify);
+}
+
 void timer_callback() {
   // 如果队列没有清空，那么就提醒一下。因为async_send是一个不可靠的提醒，另外，提醒后，因为没有逻辑锁，会出现：
   // uv_aysnc_send:call queue_pop queue_push 的情况，从而导致残留
@@ -394,8 +386,9 @@ void timer_callback() {
   if (!queue_empty(q)) {  // data_income_notify.data == 1){
     // clear q
     log_info("flush");
-    int r = uv_async_send(&data_income_notify);
+    push_data();
   }
+
 #endif
 
   if (exiting) {

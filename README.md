@@ -23,15 +23,18 @@ Linux 5.10.0-11-amd64 #1 SMP Debian 5.10.92-2 (2022-02-28) x86_64 GNU/Linux
 
 When a tunnel needs to be established, just run command `termtunnel -a` on that remote host.
 
-In the remote termtunnel console, you are allowed to download and upload files or create socks5 proxy.
+For example, you can execute `termtunnel ssh root@19.95.02.23` locally, then start `/tmp/termtunnel -a` on the ssh host to enter the termtunnel shell
 
-For example, you can execute `termtunnel ssh root@19.95.02.23` locally, then start `/tmp/termtunnel -a` on the ssh host to enter the interactive console, and then you can type `upload` to upload a local file to remote or create a port forward. supported commands are listed in the [REPL Command](#repl-command) section.
+In the termtunnel shell, you are allowed to download and upload files or create socks5 proxy.
+
+**So how to use the console?**  *See [Use case](#use-case) please.*
+
 ```bash
 sh-3.2$ >> termtunnel ssh root@19.95.02.23
 root@host:~# /tmp/termsocks -a
 termtunnel>> help
 ```
-
+[Use case](#use-case) 
 ## Install
 * Linux
    * Provide prebuilt static binaries to run. See [lastest releases](https://github.com/beordle/termtunnel/releases/latest)
@@ -54,25 +57,29 @@ flowchart LR
 Termtunnel use pty to control local application, write data to its stdin, and read data from its stdout. and then the local application stdin and stdout be linked with remote termtunnel.
 
 
-## REPL Command
+## Use case
 
-> This documentation may be out of date, please refer to the output of the **help** command.
->
-* **help**:
-   * view command help
-
-* **local_listen**
-   * local_listen [local_host] [local_port] [remote_host] [remote_port]
-   * when remote_port==0, the service listen on remote_port will be a socks5.
-
-* **remote_listen**
-   * remote_listen [remote_host] [remote_port] [local_host] [local_port]
-   * when remote_port==0, the service listen on remote_port will be a socks5.
-
-* **download**
+> This documentation may be out of date, please refer to the output of the **help** command  if necessary.
+#### Download a file to local
+* type **download** and Enter
    * download a file
-* **upload**
+#### Upload a file to remote
+* type **upload** and Enter
    * upload a file
+
+#### Share local internet with remote
+
+* type **local_listen**
+#### Share local internet yum mirror with remote
+
+* type **local_listen**
+
+#### Share Intranet host 123.123.123.123's VNC port 5100 with local
+* type **local_listen 127.0.0.1 3333 123.123.123.123 5100** and enter
+
+
+
+
 
 
 ## Build from Source
