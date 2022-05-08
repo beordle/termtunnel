@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 project(termtunnel C)
 set(CMAKE_C_STANDARD 11)
-
 if (CMAKE_HOST_WIN32)
     set(WINDOWS 1)
 elseif (CMAKE_HOST_APPLE)
@@ -10,8 +9,10 @@ elseif (CMAKE_HOST_UNIX)
     set(LINUX 1)
 endif ()
 
+IF (NOT CYGWIN)
 add_subdirectory(thirdparty/libuv)
 include_directories(thirdparty/libuv/include) 
+endif()
 
 add_compile_options(-fpermissive -O3)
 
@@ -70,7 +71,12 @@ thirdparty/setproctitle.c
 thirdparty/tinyfiledialogs/tinyfiledialogs.c
 )
 
+IF (CYGWIN)  # cygwin use system default libuv without epoll.
+target_link_libraries(termtunnel uv)
+ELSE()
 target_link_libraries(termtunnel uv_a)
+ENDIF()
+
 if (LINUX)
     target_link_libraries(termtunnel PUBLIC "-static")
 endif()

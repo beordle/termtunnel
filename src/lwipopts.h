@@ -99,7 +99,11 @@ a lot of data that needs to be copied, this should be set high. */
 /* MEMP_NUM_NETBUF: the number of struct netbufs. */
 #define MEMP_NUM_NETBUF 200000
 /* MEMP_NUM_NETCONN: the number of struct netconns. */
+#ifdef __CYGWIN__
+#define MEMP_NUM_NETCONN 20
+#else
 #define MEMP_NUM_NETCONN 200  // number of socket
+#endif
 /* MEMP_NUM_TCPIP_MSG_*: the number of struct tcpip_msg, which is used
    for sequential API communication and incoming packets. Used in
    src/api/tcpip.c. */
