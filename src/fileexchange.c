@@ -120,7 +120,7 @@ int file_sender_start() {
 
 static int file_send_request(path_exchange_t *pe) {
   int nfd = vnet_tcp_connect(receiver_service_port);
-  log_debug("file_send_request file %s", pe->dst_path);
+  log_debug("open local %s to send file %s", pe->src_path, pe->dst_path);
   vnet_send(nfd, pe->dst_path, strlen(pe->dst_path) + 1);  // with_zero_as_split
   int fd = open(pe->src_path, O_RDONLY);
   if (fd < 0) {
@@ -138,7 +138,7 @@ static int file_send_request(path_exchange_t *pe) {
       log_debug("readbytes==0");
       break;
     }
-    log_debug("vnet_send");
+    log_debug("vnet_send %d", readbytes);
     vnet_send(nfd, buf, readbytes);
     log_debug("vnet_send_end");
   }
@@ -160,8 +160,9 @@ int file_send_start(char *src_path, char *dst_path) {
 
   // uv_async_t* exchange_notify=(uv_async_t* )malloc(sizeof(uv_async_t));
   // uv_async_init(uv_default_loop(), exchange_notify, exchange_notify_handler);
+  struct stat a;
   // pe->exchange_notify = exchange_notify;
-  if (stat(src_path, NULL) == 0) {
+  if (stat(src_path, &a) == 0) {
     // pe->exchange_notify->data=(void*)-1;
     // uv_async_send(pe->exchange_notify);
   }
@@ -184,10 +185,14 @@ static int file_recv_request(path_exchange_t *pe) {
   char buf[READ_CHUNK_SIZE];
   while (true) {
     int readbytes = vnet_recv(nfd, buf, READ_CHUNK_SIZE);
+    log_error("recv done");
     if (readbytes < 0) {
       // TODO
+      log_error("<0");
+      break;
     }
     if (readbytes == 0) {
+      log_error("==0");
       break;
     }
     write(fd, buf, readbytes);
