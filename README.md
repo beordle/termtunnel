@@ -1,4 +1,3 @@
-
 # Termtunnel [![Termtunnel](https://github.com/beordle/termtunnel/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/beordle/termtunnel/actions/workflows/build.yml)
 Termtunnel is a tool that allows you to create a tunnel via multiple hops or fight against intranet isolation in a very simple way. As lrzsz can, termtunnel supports not only file transfer but also network proxy.
 
@@ -61,9 +60,10 @@ termtunnel>> help
 ####  Share local internet with remote
 > type `remote_listen 127.0.0.1 8000 127.0.0.1 0` and enter
  
-> now, the port 8000 is a socks5 proxy server. well, open another windows to use it.
+> now, the port 8000 is a socks5/http mixed proxy server. well, open new a window to use it.
  
 > eg. You can use it by curl: `curl --socks5 127.0.0.1:8000 https://google.com`
+> and `curl -x 127.0.0.1:8000 https://google.com`
 > or, [let yum use it.](https://unix.stackexchange.com/questions/43654/how-to-use-socks-proxy-with-yum)
 
 #### Share Intranet host 10.11.123.123's VNC port 5100 with local
@@ -100,3 +100,4 @@ make
 
 ## License
 This application is free software; you can redistribute it and/or modify it under the terms of the MIT license. See LICENSE file for details.
+

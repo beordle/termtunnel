@@ -122,7 +122,7 @@ int vnet_listen_at(uint16_t port, void *cb, char* thread_desc) {
                      DEFAULT_THREAD_PRIO);
     } else {
       log_info("abort %d %d %s", new_sd, errno, strerror(errno));
-      
+
     }
   }
 }
@@ -144,6 +144,7 @@ int vnet_tcp_connect(uint16_t port) {
     return s;
   }
   log_error("connect failed %d", ret);
+  lwip_close(s);
   return ret;
 }
 

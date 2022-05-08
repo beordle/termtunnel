@@ -1,11 +1,12 @@
 /**
  * Copyright (c) 2022 Jindong Zhang
- * 
+ *
  * This software is released under the MIT License.
  * https://opensource.org/licenses/MIT
  */
 
 #include "repl.h"
+
 #include <assert.h>
 #include <ctype.h>
 #include <libgen.h>  // basename
@@ -247,9 +248,9 @@ int portforward_func(int argc, char **argv) {
   int dst_port = atoi(argv[4]);
   int forward_type;
   if (strcmp(argv[0], "remote_listen") == 0) {
-      forward_type = FORWARD_STATIC_PORT_MAP_LISTEN_ON_AGENT;
+    forward_type = FORWARD_STATIC_PORT_MAP_LISTEN_ON_AGENT;
   } else {
-      forward_type = FORWARD_STATIC_PORT_MAP;
+    forward_type = FORWARD_STATIC_PORT_MAP;
   }
 
   port_forward_intent_t *a = new_port_forward_intent(
@@ -270,6 +271,7 @@ int portforward_func(int argc, char **argv) {
 
   return 0;
 }
+
 
 int upload_func(int argc, char **argv) {
   char *url = (char *)malloc(PATH_MAX);
@@ -337,48 +339,6 @@ int download_func(int argc, char **argv) {
   return 0;
 }
 
-int ping_func(int argc, char **argv) {
-  send_binary(out, COMMAND_TTY_PING, NULL, 0);
-  int type;
-  char *buf;
-  int64_t size;
-  recv_data(in, &type, &buf, &size);
-  if (type == COMMAND_TTY_PING) {
-    printf("ping done\n");
-  }
-  free(buf);
-  return 0;
-}
-
-int ping_counter_func(int argc, char **argv) {
-  printf("ping %lld\n", ping_count);
-  return 0;
-}
-
-#if 0
-// 进行base64和普通载荷的测试
-int test_func(int argc, char **argv)
-{
-    // while (true){
-    send_binary(out, COMMAND_TTY_PING_BASE64_BINARY, NULL, 0);
-    int type;
-    char *buf;
-    int64_t size;
-    while (!keyboard_break)
-    {
-
-        recv_data(in, &type, &buf, &size);
-        if (type == COMMAND_TTY_PING)
-        {
-            printf("pong\n");
-        }
-        free(buf);
-    }
-    keyboard_break = false;
-    return 0;
-}
-#endif
-
 int exit_func(int argc, char **argv) { return -1; }
 
 int command_not_found(int argc, char **argv) {
@@ -388,18 +348,14 @@ int command_not_found(int argc, char **argv) {
 int help_func(int argc, char **argv);
 
 actionfinder_t action_table[] = {
-    //    {"hello", hello_func, ""},
-    //    {"ping", ping_func, ""},
-    //    {"ping_counter", ping_counter_func, ""},
-    //    {"test", test_func, "debug"},
     {"local_listen", portforward_func, "port forward bind on local host",
-      "local_listen [local_host] [local_port] [remote_host] [remote_port]\n"
-      "when remote_port==0, the service listen on remote_port will be a socks5."
-    },
+     "local_listen [local_host] [local_port] [remote_host] [remote_port]\n"
+     "when remote_port==0, the service listen on remote_port will be a "
+     "socks5+http proxy server."},
     {"remote_listen", portforward_func, "port forward bind on remote host",
-      "remote_listen [remote_host] [remote_port] [local_host] [local_port]\n"
-      "when local_port==0, the service listen on remote_port  will be a socks5."
-    },
+     "remote_listen [remote_host] [remote_port] [local_host] [local_port]\n"
+     "when local_port==0, the service listen on remote_port  will be a "
+     "socks5+http proxy server."},
     {"upload", upload_func, "upload a file", "usage"},
     {"rz", upload_func, "alias upload", "usage"},
     {"download", download_func, "download a file", "usage"},
@@ -436,7 +392,6 @@ int repl_execve(int argc, char **argv) {
   int func_count = sizeof(action_table) / sizeof(actionfinder_t);
   for (int i = 0; i < func_count; i++) {
     if (strcmp(binname, action_table[i].funcname) == 0) {
-      // printf("%p\n", action_table[i].funcptr);
       int (*entry)(int argc, char **argv);
       entry = action_table[i].funcptr;
       return entry(argc, argv);
@@ -548,8 +503,6 @@ void interact_run(int _in, int _out) {
       if (buf) {
         free(buf);
       }
-
-      // free(s.c);
     }
   }
 }

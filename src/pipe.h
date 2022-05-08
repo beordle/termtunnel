@@ -24,4 +24,5 @@ int libuv_add_vnet_notify();
 extern int vnet_notify_to_libuv(char *buf, size_t size);
 void comm_write_packet_to_cli(int64_t type, char *buf, size_t s);
 void comm_write_static_packet_to_cli(int64_t type, char *buf, size_t s);
+int push_data();
 #endif

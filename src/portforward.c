@@ -88,26 +88,18 @@ static void portforward_static_server_request(void *p) {
   char portaddr[6];
   struct addrinfo *res;
   snprintf(portaddr, sizeof(portaddr), "%d", port);
-  int ret = getaddrinfo(host, portaddr, NULL, &res);
-  if (ret == EAI_NODATA) {
+
+
+  struct hostent *shes = gethostbyname(host);
+  if (!shes) {
     close(sock);
+    lwip_close(sd);
     return;
   }
-  if (ret == 0) {
-    struct addrinfo *r;
-    for (r = res; r != NULL; r = r->ai_next) {
-      if (r->ai_family == AF_INET) {
-        struct sockaddr_in *addr;
-        addr = (struct sockaddr_in *)r->ai_addr;
-        port = ntohs(addr->sin_port);
-        host = inet_ntoa((struct in_addr)addr->sin_addr);  // TODO(jdz) thread safe
-        log_info("use ip %s:%he for domain", host, port);
-        break;
-      }
-    }
-  }
-  freeaddrinfo(res);
-
+  free(host);
+  // TODO(jdz) thread safe
+  host = inet_ntoa(*(struct in_addr*)shes->h_addr);
+  log_info("use ip %s:%hu for domain", host, port);
   struct sockaddr_in addr;
 
   memset(&addr, 0, sizeof(addr));
@@ -119,7 +111,7 @@ static void portforward_static_server_request(void *p) {
   addr.sin_addr.s_addr = inet_addr(host);
   /* connect */
   log_info("start connect %s:%hu", host, port);
-  ret = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+  int ret = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
   if (ret != 0) {
     lwip_close(sd);
     log_info("connect error return %d errno:%d %s", ret, errno,
@@ -170,9 +162,11 @@ static void loop_lwipsocket_to_socket(int *arg) {
                       MSG_DONTWAIT);
     log_info("lwip_readed %d", r);
     if (r < 0) {
+      close(fd);
       return;
     }
     if (r == 0) {
+      close(fd);
       return;
     }
     log_info("write expect %d %d", fd, r);
@@ -193,7 +187,7 @@ static void loop_socket_to_lwipsocket(int *arg) {
   int fd = arg[1];
   while (true) {
     char buf[READ_CHUNK_SIZE];
-    int r = read(fd, buf, READ_CHUNK_SIZE);
+    int r = read(fd, buf, READ_CHUNK_SIZE); //TODO
     if (r < 0) {
       lwip_shutdown(lwip_fd, SHUT_RDWR);  // TODO(jdz) 最好去掉
       return;
@@ -215,9 +209,8 @@ static void loop_socket_to_lwipsocket(int *arg) {
   return;
 }
 
-//就直接启动两个线程即可。无法一起select。因为一个是lwip的fd一个是真实的fd。
+// 就直接启动两个线程即可。无法一起select。因为一个是lwip的fd一个是真实的fd。
 int pipe_lwip_socket_and_socket_pair(int lwip_fd, int fd) {
-  log_info("pipe");
   int *array = (int *)malloc(2 * sizeof(int));
   *(array) = lwip_fd;
   *(array + 1) = fd;
@@ -225,7 +218,6 @@ int pipe_lwip_socket_and_socket_pair(int lwip_fd, int fd) {
   pthread_create(&worker2, NULL, &loop_socket_to_lwipsocket, (void *)array);
   loop_lwipsocket_to_socket((void *)array);
   pthread_join(worker2, NULL);
-  log_info("pipe_lwip_socket_and_socket_pair done");
   return 0;
 }
 
@@ -239,8 +231,8 @@ void portforward_static_server_pipe(port_listen_t *pe) {
   log_info("connect sent %s, do pipe", pe->host);
   pipe_lwip_socket_and_socket_pair(lwip_fd, pe->local_fd);
   log_info("do pipe done", pe->host);
-  free(pe);
   close(pe->local_fd);
+  free(pe);
   int ret = lwip_close(lwip_fd);
   CHECK(ret == 0, "lwip_close");
   return;
@@ -249,10 +241,10 @@ void portforward_static_server_pipe(port_listen_t *pe) {
 void portforward_transparent_server_pipe(port_listen_t *pe) {
   int lwip_fd = vnet_tcp_connect(socks5_port);
   pipe_lwip_socket_and_socket_pair(lwip_fd, pe->local_fd);
-  free(pe);
   close(pe->local_fd);
   int ret = lwip_close(lwip_fd);
   CHECK(ret == 0, "lwip_close");
+  free(pe);
   return;
 }
 
@@ -266,7 +258,7 @@ static void portforward_service_handler(port_listen_t *pe) {
       strcpy(child_pe->host, pe->host);
       child_pe->port = pe->port;
       child_pe->local_fd = new_sd;
-      if (pe->port == 0) {  // socksproxy
+      if (pe->port == 0) {  // socks/http proxy
         pthread_create(worker, NULL, &portforward_transparent_server_pipe, (void *)child_pe);
       } else {
         pthread_create(worker, NULL, &portforward_static_server_pipe, (void *)child_pe);

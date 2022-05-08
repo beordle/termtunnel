@@ -1,13 +1,13 @@
 /**
  * Copyright (c) 2022 Jindong Zhang
- * 
+ *
  * This software is released under the MIT License.
  * https://opensource.org/licenses/MIT
  */
 
 #define _GNU_SOURCE
-
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
@@ -25,10 +25,11 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include "vnet.h"
+
 #include "log.h"
 #include "portforward.h"
 #include "vclient.h"
+#include "vnet.h"
 enum socks { RESERVED = 0x00, VERSION4 = 0x04, VERSION5 = 0x05 };
 
 enum socks_auth_methods { NOAUTH = 0x00, USERPASS = 0x02, NOMETHOD = 0xff };
@@ -40,11 +41,8 @@ enum socks_auth_userpass {
 };
 
 enum socks_command { CONNECT = 0x01 };
-
 enum socks_command_type { IP = 0x01, DOMAIN = 0x03 };
-
 enum socks_status { OK = 0x00, FAILED = 0x05 };
-
 void *app_thread_process(void *fd);
 
 #define BUFSIZE 65536
@@ -67,7 +65,7 @@ int readn(int fd, void *buf, int n) {
       }
     } else {
       if (nread == 0) {
-        return 0;
+        return 0;  // TODO(jdz)
       } else {
         left -= nread;
         buf += nread;
@@ -86,7 +84,7 @@ static int writen(int fd, void *buf, int n) {
       }
     } else {
       if (nwrite == n) {
-        return 0;
+        return n;
       } else {
         left -= nwrite;
         buf += nwrite;
@@ -94,6 +92,145 @@ static int writen(int fd, void *buf, int n) {
     }
   }
   return n;
+}
+
+int report_error_to_client(int fd, char *message) {
+  char buffer[512];
+  snprintf(buffer, sizeof(buffer), "HTTP/1.1 500 %s\r\n\r\n", message);
+  writen(fd, buffer, strlen(buffer));
+}
+
+int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
+  uint16_t httpport = 80;
+  char buffer[4096];
+  char buf2[512];
+  char *url;
+  char host[128];
+  char *h, *rest;
+  uint16_t port;
+  char cmd[16];
+  int read_bytes = 0;
+  char *header = NULL;
+  // char *prefetch_data, prefetch_data_size);
+  //  TODO read to HTTP1.1
+  memcpy(buffer, prefetch_data, prefetch_data_size);
+  int n = lwip_read(fd, buffer + prefetch_data_size,
+                sizeof(buffer) - prefetch_data_size);
+  header = buffer;
+  read_bytes = n + prefetch_data_size;
+  if (n < 1) {
+    if (1) {
+      if (n < 0) perror("read");
+      log_info("nothing read.");
+    }
+    return 0;
+  }
+  log_info("prefetch %d bytes", n);
+  int i = 0;
+  for (i = 0; i < 15; i++)
+    if (buffer[i] && (buffer[i] != ' ')) {
+      cmd[i] = (char)toupper((int)buffer[i]);
+    } else {
+      break;
+    }
+  // printf("i:[%d]\n",i);
+  cmd[i] = '\0';
+  // printf("cmd:[%s]\n",cmd);
+  if (strcmp(cmd, "GET") && strcmp(cmd, "POST") && strcmp(cmd, "CONNECT")) {
+    report_error_to_client(fd, "This command is not supported");
+    close(fd);
+    return 0;
+  }
+
+  if (strcmp(cmd, "CONNECT") == 0) {
+    // CONNECT g.cn:443 HTTP/1.1
+    url = buffer + 8;  //"CONNECT "
+    h = host;
+    for (; *url && (*url != ':') && (*url != '/'); url++) *(h++) = *url;
+    *h = '\0';
+    if (*url == ':') {
+      port = strtoul(url + 1, NULL, 0);
+      for (; *url != '/'; url++)
+        ;
+    } else {
+      port = httpport;
+    }
+    for (rest = url; *rest && (*rest != '\n'); rest++);
+    if (*rest) {
+      *rest = '\0';
+      rest++;
+    }
+  } else {
+    //GET http://g.cn:80
+    for (url = buffer; *url && (*url != '/'); url++);
+    url += 2;
+    h = host;
+    for (; *url && (*url != ':') && (*url != '/'); url++) *(h++) = *url;
+    *h = '\0';
+    if (*url == ':') {
+      port = strtoul(url + 1, NULL, 0);
+      for (; *url != '/'; url++);
+    } else {
+      port = httpport;
+    }
+    for (rest = url; *rest && (*rest != '\n'); rest++);
+    if (*rest) {
+      *rest = '\0';
+      rest++;
+    }
+  }
+  int rfd;
+  if ((rfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    log_info("socket error");
+    return 0;
+  }
+
+  struct hostent *shes = gethostbyname(host);
+  if (!shes) {
+    report_error_to_client(fd, hstrerror(h_errno));
+    close(fd);
+    return 0;
+  }
+  struct sockaddr_in sin;
+  sin.sin_family = AF_INET;
+  bcopy(shes->h_addr, &sin.sin_addr, sizeof(struct in_addr));
+  sin.sin_port = htons(port);
+  if (connect(rfd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in)) < 0) {
+    report_error_to_client(fd, strerror(buf2));
+    lwip_close(fd);
+    return 0;
+  }
+
+  if (strcmp(cmd, "CONNECT") != 0) {
+    sprintf(buf2, "%s %s\n", cmd, url);
+    if (write(rfd, buf2, strlen(buf2)) < 1) {
+      lwip_close(fd);
+      close(rfd);
+      return 0;
+    }
+  } else {
+    char *reply = "HTTP/1.1 200 Connection Established\r\n\r\n";
+    if (writen(fd, reply, strlen(reply)) < 1) {
+      lwip_close(fd);
+      close(rfd);
+      return 0;
+    }
+  }
+  if (strcmp(cmd, "CONNECT") != 0) {
+    int valid_bytes = read_bytes - (rest - header);
+    if (valid_bytes > 0) {  // strlen(rest)
+      if (write(rfd, rest, valid_bytes) < 1) {
+        perror("write[b]");
+        lwip_close(fd);
+        close(rfd);
+        return 0;
+      }
+    }
+  }
+  pipe_lwip_socket_and_socket_pair(fd, rfd);
+
+  close(rfd);
+  lwip_close(fd);
 }
 
 void app_thread_exit(int ret, int fd) {
@@ -165,17 +302,16 @@ int app_connect(int type, void *buf, unsigned short int portnum) {
   return -1;
 }
 
-int socks_invitation(int fd, int *version) {
-  char init[2];
-  int nread = readn(fd, (void *)init, ARRAY_SIZE(init));
-  if (nread == 2 && init[0] != VERSION5 && init[0] != VERSION4) {
-    log_info("They send us %hhX %hhX", init[0], init[1]);
-    log_info("Incompatible version!");
-    app_thread_exit(0, fd);
+int socks_invitation(int fd, int *version, char *header) {
+  int nread = readn(fd, header, 2);
+  if (nread == 2 && header[0] != VERSION5 && header[0] != VERSION4) {
+    log_info("They send us %hhX %hhX", header[0], header[1]);
+    *version = 0;
+    return 0;
   }
-  log_info("Initial %hhX %hhX", init[0], init[1]);
-  *version = init[0];
-  return init[1];
+  log_info("Initial %hhX %hhX", header[0], header[1]);
+  *version = header[0];
+  return header[1];
 }
 
 char *socks5_auth_get_user(int fd) {
@@ -318,27 +454,32 @@ void socks5_ip_send_response(int fd, char *ip, unsigned short int port)
 */
 
 void socks5_domain_send_response(int fd, char *domain, unsigned char size,
-                                 unsigned short int port) {
-  char response[4] = {VERSION5, OK, RESERVED, DOMAIN};
-  writen(fd, (void *)response, ARRAY_SIZE(response));
-  // log_info("size %hu",size);
-  // log_info("sizeof size %d",sizeof(size));
-  // writen(fd, "\0\0\0\0\0\0\0\0\0\0", IPSIZE);
-  writen(fd, (void *)&size, sizeof(size));
-  writen(fd, (void *)domain, size * sizeof(char));
+                                 uint16_t port) {
+  char response[4] = {VERSION5, OK, RESERVED, IP};
+  writen(fd, (void *)response, sizeof(response));
+#if 0
+	buf->data[0] = 0x5;
+	buf->data[1] = 0x0;
+	buf->data[2] = 0x0;
+	buf->data[3] = 0x1;
+	int s_addr = inet_aton("0.0.0.0", NULL);
+	uint32_t us_addr = htonl(s_addr);
+	memcpy(&buf->data[4], &us_addr, 4);
+	buf->data[4] = 0x1;
+	buf->data[4 + 4] = 0x19;
+	buf->data[4 + 5] = 0x19;
+	buf->used = 10;
+#endif
+  char buf[4];
+  int s_addr = inet_aton("0.0.0.0", NULL);
+  uint32_t us_addr = htonl(s_addr);
+  memcpy(buf, &us_addr, 4);
+  buf[0] = 0x1;
+  writen(fd, (void *)buf, sizeof(buf));
+  // writen(fd, (void *)domain, size * sizeof(char));
   writen(fd, (void *)&port, sizeof(port));
 }
 
-/*
-void socks5_domain_send_response(int fd, char *domain, unsigned char size,
-                                 unsigned short int port)
-{
-        char response[4] = { VERSION5, OK, RESERVED, IP };
-        writen(fd, (void *)response, ARRAY_SIZE(response));
-        writen(fd, "1.1.1.1.1", IPSIZE);
-        writen(fd, (void *)&port, sizeof(port));
-}
-*/
 int socks4_is_4a(char *ip) {
   return (ip[0] == 0 && ip[1] == 0 && ip[2] == 0 && ip[3] != 0);
 }
@@ -372,18 +513,21 @@ void socks4_send_response(int fd, int status) {
 }
 
 void *app_thread_process(void *fd) {
-  log_info("new socks client xx ");
   int net_fd = *(int *)fd;
   int version = 0;
   int inet_fd = -1;
-  log_info("new socks client xx %d", net_fd);
-  char methods = socks_invitation(net_fd, &version);
-  log_info("new socks client 2 ");
+  char header[255];
+  char methods = socks_invitation(net_fd, &version, header);
+  if (version == 0) {
+    // fallback to http proxy
+    log_info("fallback to http");
+    http_proxy(net_fd, header, 2);
+    return NULL;
+  }
   switch (version) {
     case VERSION5: {
       socks5_auth(net_fd, methods);
       int command = socks5_command(net_fd);
-      log_info("new socks client 3 ");
       if (command == IP) {
         char *ip = socks_ip_read(net_fd);
         unsigned short int p = socks_read_port(net_fd);
@@ -452,4 +596,3 @@ void *app_thread_process(void *fd) {
 int socksproxy_remote_start() {
   return vnet_listen_at(socks5_port, app_thread_process, "socksproxy");
 }
-
