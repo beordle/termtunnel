@@ -518,7 +518,7 @@ void send_data_to_agent(char *buf, size_t size) {
 void send_base64binary_to_agent(const char *buf, size_t size) {
   size_t elen = 0;
   char *ebuf = base64_encode(buf, size, &elen);
-  log_debug("server will write base64 %*s(%d)", elen, ebuf, elen);
+  //log_debug("server will write base64 %*s(%d)", elen, ebuf, elen);
   char *tmp = (char *)malloc(elen + 1);
   tmp[0] = 'B';
   memcpy(tmp + 1, ebuf, elen);
@@ -569,6 +569,7 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
         // TODO add folder
       }
 
+      log_info("start ok");
       break;
     }
     case COMMAND_PORT_FORWARD: {
@@ -606,7 +607,7 @@ void server_handle_green_packet(char *buf, int size) {
   //首包认为是：AGENT_VERSION: 1
   // handshake()
   // MAGIC
-  log_debug("server handle agent data: %*s(%d)", size, buf, size);
+  //log_debug("server handle agent data: %*s(%d)", size, buf, size);
   int handshake_length = sizeof("MAGIC!") - 1;
   if (size == handshake_length &&
       memcmp("MAGIC!", buf, handshake_length) == 0) {
@@ -645,7 +646,7 @@ void server_handle_green_packet(char *buf, int size) {
 
 //流量
 void server_handle_agent_data(char *buf, int size) {
-  log_debug("server handle agent binary data: %*s(%d)", size, buf, size);
+  //log_debug("server handle agent binary data: %*s(%d)", size, buf, size);
   // TCPIP
   vnet_data_income(buf, size);
 
