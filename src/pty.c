@@ -125,6 +125,7 @@ void resize_pty(winsize_t *ttysize) { ioctl(pty_fd, TIOCSWINSZ, ttysize); }
 
 int do_waitpid_wrap(thread_pass_arg_t *arg) {
   int exitcode = do_waitpid(arg->process_pid);
+  log_info("pty exit");
   arg->cb_func(exitcode);
   free(arg);
   return exitcode;

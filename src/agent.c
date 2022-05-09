@@ -146,10 +146,10 @@ void agent_read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
       data = (char *)malloc(2 * max_suggested_size);
     }
     static int data_size = 0;
-    CHECK(nread < max_suggested_size, "nread<2*max_suggested_size");
+    CHECK(nread <= max_suggested_size, "nread<=max_suggested_size");
     memcpy(data + data_size, buf->base, nread);
     data_size += nread;
-    CHECK(data_size < max_suggested_size, "data_size>=max_suggested_size");
+    CHECK(data_size <= 2 * max_suggested_size, "data_size>=2*max_suggested_size");
 
     int used_data_size = process_stdin(data, data_size);
     int unused_data_size = data_size - used_data_size;
