@@ -533,7 +533,8 @@ void socks4_send_response(int fd, int status) {
 }
 
 void *app_thread_process(void *fd) {
-  int net_fd = *(int *)fd;
+  int net_fd = (int)fd;
+  set_vnet_socket_nodelay(net_fd);
   int version = 0;
   int inet_fd = -1;
   char header[255];

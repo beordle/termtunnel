@@ -36,7 +36,7 @@ typedef struct path_exchange {
 } path_exchange_t;
 
 static int file_receiver_request(void *p) {
-  int sd = *(int*)p;
+  int sd = (int)p;
   set_vnet_socket_nodelay(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
@@ -76,7 +76,8 @@ int file_receiver_start() {
 }
 
 static int file_sender_request(void *p) {
-  int sd = *(int*)p;
+  int sd = (int)p;
+  set_vnet_socket_nodelay(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
   log_info("sd: %d", sd);

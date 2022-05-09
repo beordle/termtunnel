@@ -118,7 +118,7 @@ int vnet_listen_at(uint16_t port, void *cb, char* thread_desc) {
     if ((new_sd = lwip_accept(sock, (struct sockaddr *)&remote, (socklen_t *)&size)) >= 0) {
       log_info("new tcp");
       sys_thread_new(thread_desc, cb,
-                     (void *)&new_sd, DEFAULT_THREAD_STACKSIZE,
+                     (void *)new_sd, DEFAULT_THREAD_STACKSIZE,
                      DEFAULT_THREAD_PRIO);
     } else {
       log_info("abort %d %d %s", new_sd, errno, strerror(errno));
