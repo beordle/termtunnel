@@ -94,6 +94,24 @@ static int writen(int fd, void *buf, int n) {
   return n;
 }
 
+
+int readtocharR(int fd, char *buf, int bufsize) {
+  int readbytes = 0;
+  char* last;
+  do {
+      int n = lwip_read(fd, buf + readbytes, 1);
+      if (errno == EINTR || errno == EAGAIN) {
+        continue;
+      }
+      if (n <= 0) {
+        return 0;
+      }
+      readbytes += 1;
+      last = buf + readbytes - 1;
+    } while (strncmp(last-3 ,"\r\n\r\n", 4)!=0 && readbytes < bufsize);
+    return readbytes;
+}
+
 int report_error_to_client(int fd, char *message) {
   char buffer[512];
   snprintf(buffer, sizeof(buffer), "HTTP/1.1 500 %s\r\n\r\n", message);
@@ -114,7 +132,9 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
   // char *prefetch_data, prefetch_data_size);
   //  TODO read to HTTP1.1
   memcpy(buffer, prefetch_data, prefetch_data_size);
-  int n = lwip_read(fd, buffer + prefetch_data_size,
+  //int n = lwip_read(fd, buffer + prefetch_data_size,
+  //              sizeof(buffer) - prefetch_data_size);
+  int n = readtocharR(fd, buffer + prefetch_data_size,
                 sizeof(buffer) - prefetch_data_size);
   header = buffer;
   read_bytes = n + prefetch_data_size;
