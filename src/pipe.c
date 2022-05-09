@@ -572,6 +572,12 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
       log_info("start ok");
       break;
     }
+    case COMMAND_GET_RUNNING_TASK_COUNT: {
+      
+      get_running_task_count();
+      //comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind done (guess)\n"),
+      //                        sizeof("bind done (guess)\n"));
+    }
     case COMMAND_PORT_FORWARD: {
       port_forward_intent_t *a = (port_forward_intent_t *)buf;
       log_info("portforward %s:%hu <-> %s:%hu", a->src_host, a->src_port,

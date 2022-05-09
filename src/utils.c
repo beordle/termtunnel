@@ -5,11 +5,8 @@
  * https://opensource.org/licenses/MIT
  */
 
-#ifndef TERMTUNNEL_UTILS_H
-
-#define TERMTUNNEL_UTILS_H
 #include "utils.h"
-
+#include <pthread.h>
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -18,6 +15,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <errno.h>
+
 //如果仅仅 ~ICANON; ~ECHO
 //那么，我们还是可以通过键盘触发SIGINT，SIGSTOP等信号。此时可以手动选择转发给远端。
 //但是依据ssh，这样设置可以直接将信号转发给远程终端，从而如果我们的程序收到了键盘产生的信号的话，一定是从另一个console中手动kill过来的。
@@ -94,4 +92,24 @@ void set_stdin_raw() {
   _stdin_is_raw = true;
 }
 
-#endif
+void utils_counter_init(struct counter_t *c) {
+  c->value = 0;
+  pthread_mutex_init(&c->lock, NULL);
+}
+
+void utils_counter_increment_by(struct counter_t *c, int by) {
+  pthread_mutex_lock(&c->lock);
+  c->value += by;
+  pthread_mutex_unlock(&c->lock);
+}
+
+void utils_counter_increment(struct counter_t *c) {
+  utils_counter_increment_by(c, 1);
+}
+
+int utils_counter_get(struct counter_t *c) {
+  pthread_mutex_lock(&c->lock);
+  int rc = c->value;
+  pthread_mutex_unlock(&c->lock);
+  return rc;
+}

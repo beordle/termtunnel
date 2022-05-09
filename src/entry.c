@@ -108,7 +108,7 @@ int main(int argc, const char *argv[]) {
       log_add_fp(f, verbose_level);
     }
   }
-
+  termtunnel_state_init();
   q = queue_create();
   // spt_init(argc, argv);
 
