@@ -255,7 +255,7 @@ int portforward_func(int argc, char **argv) {
 
   port_forward_intent_t *a = new_port_forward_intent(
       forward_type, src_host, src_port, dst_host, dst_port);
-  send_binary(out, COMMAND_PORT_FORWARD, a, sizeof(file_exchange_intent_t));
+  send_binary(out, COMMAND_PORT_FORWARD, a, sizeof(port_forward_intent_t));
   free(a);
 
   int type;
