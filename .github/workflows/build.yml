@@ -218,3 +218,40 @@ jobs:
         asset_name: termtunnel-${{ github.event.inputs.version }}-linux-armeabi.tar.gz
         asset_content_type: application/octet-stream
 
+
+  create_linux_mips64le_static_release:
+    needs: create_release
+    name: Create static linux mips64el release
+    runs-on: ubuntu-18.04
+    env:  
+      CC: /opt/mips64el-linux-musl-cross/bin/mips64el-linux-musl-gcc
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Prepare cross-compiler
+      run: |
+        curl -O http://musl.cc/mips64el-linux-musl-cross.tgz
+        tar xzf mips64el-linux-musl-cross.tgz -C /opt
+    - run: /opt/mips64el-linux-musl-cross/bin/mips64el-linux-musl-gcc --version
+    - name: Build
+      run: |
+        cmake .
+        make
+        mv termtunnel termtunnel-linux-mips64el
+        tar -czf termtunnel-linux-mips64el.tar.gz termtunnel-linux-mips64el
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with: 
+        name: termtunnel-linux-mips64el
+        path: termtunnel-linux-mips64el
+    - name: Upload Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: termtunnel-linux-mips64el.tar.gz
+        asset_name: termtunnel-${{ github.event.inputs.version }}-linux-mips64el.tar.gz
+        asset_content_type: application/octet-stream
+
