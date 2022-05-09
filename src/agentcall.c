@@ -34,7 +34,7 @@ typedef struct thread_arg_pass_t {
 } thread_arg_pass_t;
 
 static void agentcall_server_request(void *p) {
-  int sd = *(int *)p;
+  int sd = (int)p;
   set_vnet_socket_nodelay(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
