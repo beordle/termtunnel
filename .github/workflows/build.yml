@@ -224,7 +224,7 @@ jobs:
     name: Create static linux mips64el release
     runs-on: ubuntu-18.04
     env:  
-      CC: /opt/mips64el-linux-musl-cross/bin/mips64el-linux-musl-cross
+      CC: /opt/mips64el-linux-musl-cross/bin/mips64el-linux-musl-gcc
     steps:
     - uses: actions/checkout@v2
       with:
