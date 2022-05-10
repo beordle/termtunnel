@@ -1,0 +1,26 @@
+on:
+  workflow_dispatch:
+    inputs:
+      tag-name:
+        description: 'The git tag name to bump the formula to'
+        required: true
+
+jobs:
+  homebrew:
+    name: Bump Homebrew formula
+    runs-on: ubuntu-latest
+    steps:
+      - uses: mislav/bump-homebrew-formula-action@v2
+        with:
+          formula-name: termtunnel
+          tag-name: ${{ github.event.inputs.tag-name }}
+          download-url: https://github.com/beordle/termtunnel/archive/refs/tags/version-${{ github.event.inputs.tag-name }}.tar.gz
+          formula-path: Formula/termtunnl.rb
+          homebrew-tap: Homebrew/homebrew-core
+          base-branch: master
+          commit-message: |
+            {{formulaName}} {{version}}
+
+            Created by https://github.com/mislav/bump-homebrew-formula-action
+        env:
+          COMMITTER_TOKEN: ${{ secrets.COMMITTER_TOKEN }}
