@@ -16,7 +16,7 @@ jobs:
           tag-name: ${{ github.event.inputs.tag-name }}
           download-url: https://github.com/beordle/termtunnel/archive/refs/tags/version-${{ github.event.inputs.tag-name }}.tar.gz
           formula-path: Formula/termtunnl.rb
-          homebrew-tap: Homebrew/homebrew-core
+          homebrew-tap: beordle/homebrew-tap
           base-branch: master
           commit-message: |
             {{formulaName}} {{version}}
