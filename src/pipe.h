@@ -18,7 +18,6 @@ extern int in_fd[2];
 extern int out_fd[2];
 extern void agent_write_data_to_server(char *buf, size_t s, bool autofree);
 extern void send_base64binary_to_agent(const char *buf, size_t size);
-void cli();
 void server();
 int libuv_add_vnet_notify();
 extern int vnet_notify_to_libuv(char *buf, size_t size);

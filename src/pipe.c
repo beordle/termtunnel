@@ -42,6 +42,7 @@
 #include "thirdparty/queue/queue_internal.h"
 #include "thirdparty/setproctitle.h"
 #include "utils.h"
+#include "state.h"
 #include "vnet.h"
 static uv_pipe_t in_pipe;
 static uv_pipe_t out_pipe;
@@ -344,9 +345,6 @@ static void common_read_tty(uv_stream_t *stream, ssize_t nread,
     uv_read_stop(stream);
     return;
   } else {
-    if (!server_see_agent_is_repl) {
-      send_tty_to_client(buf->base, nread);
-    }
     fsm_append_input(global_fsm_context, buf->base, nread);
     fsm_run(global_fsm_context);
     char *dst = (char *)malloc(5 * VIR_MTU);
@@ -358,6 +356,9 @@ static void common_read_tty(uv_stream_t *stream, ssize_t nread,
       } else {
         break;
       }
+    }
+    if (!server_see_agent_is_repl) {
+      send_tty_to_client(buf->base, nread);
     }
     free(dst);
   }
@@ -380,6 +381,8 @@ int push_data() {
 }
 
 void timer_callback() {
+
+  log_info("get_running_task_count %d", get_running_task_count());
   // 如果队列没有清空，那么就提醒一下。因为async_send是一个不可靠的提醒，另外，提醒后，因为没有逻辑锁，会出现：
   // uv_aysnc_send:call queue_pop queue_push 的情况，从而导致残留
 #ifdef FLUASH_QUEUE_ON_TIMER
@@ -395,31 +398,6 @@ void timer_callback() {
     // TODO (jdz）实际上设置exiting的时候，有没有写入成功的可能，因此，最好来说，我们要握手退出)
     exit(EXIT_SUCCESS);
   }
-}
-
-void cli_loop(int in, int out, int argc, const char *argv[]) {
-  repl_init();
-
-  // 不要贸然进入模式
-  while (true) {
-    interact_run(in, out);
-    kill(getpid(), SIGWINCH);
-    repl_run(in, out);
-    kill(getpid(), SIGWINCH);
-  }
-}
-
-void cli(int argc, const char *argv[], pid_t child_pid) {
-  set_client_process();
-  // Close write end
-  close(in_fd[1]);
-  close(out_fd[0]);
-
-  cli_loop(in_fd[0], out_fd[1], argc, argv);
-  close(in_fd[0]);
-  close(out_fd[1]);
-  kill(child_pid, SIGTERM);
-  exit(EXIT_SUCCESS);
 }
 
 static int pty_nonblock(int fd) {
@@ -571,6 +549,12 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
 
       log_info("start ok");
       break;
+    }
+    case COMMAND_GET_RUNNING_TASK_COUNT: {
+      
+      get_running_task_count();
+      //comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind done (guess)\n"),
+      //                        sizeof("bind done (guess)\n"));
     }
     case COMMAND_PORT_FORWARD: {
       port_forward_intent_t *a = (port_forward_intent_t *)buf;

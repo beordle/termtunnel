@@ -28,6 +28,7 @@
 #define COMMAND_FILE_EXCHANGE 7
 #define COMMAND_PORT_FORWARD 8
 #define COMMAND_RETURN 9
+#define COMMAND_GET_RUNNING_TASK_COUNT 10
 typedef struct ci {
   int i;
   int mode;

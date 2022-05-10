@@ -76,6 +76,36 @@ static void on_resize(int signum) {
               sizeof(struct winsize));
 }
 
+
+void cli_loop(int in, int out, int argc, const char *argv[]) {
+  repl_init();
+  while (true) {
+    interact_run(in, out);
+    kill(getpid(), SIGWINCH);
+    bool one_shot_mode = false;
+    if (one_shot_mode) {
+      // one shot 仅由 cli 做出解释处理，不影响 server
+      //printf("oneshot!\n");
+    } else {
+      repl_run(in, out);
+    }
+    kill(getpid(), SIGWINCH);
+  }
+}
+
+void cli(int argc, const char *argv[], pid_t child_pid) {
+  set_client_process();
+  // Close write end
+  close(in_fd[1]);
+  close(out_fd[0]);
+
+  cli_loop(in_fd[0], out_fd[1], argc, argv);
+  close(in_fd[0]);
+  close(out_fd[1]);
+  kill(child_pid, SIGTERM);
+  exit(EXIT_SUCCESS);
+}
+
 int main(int argc, const char *argv[]) {
   signal(SIGTTIN, SIG_IGN);
   signal(SIGTTOU, SIG_IGN);
@@ -108,7 +138,7 @@ int main(int argc, const char *argv[]) {
       log_add_fp(f, verbose_level);
     }
   }
-
+  termtunnel_state_init();
   q = queue_create();
   // spt_init(argc, argv);
 

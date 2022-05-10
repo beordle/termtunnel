@@ -191,7 +191,7 @@ int agent_process_frame(char *str_data, int data_size) {
   // simple command
   if (data_size == strlen("EXIT") && strcmp(str_data, "EXIT") == 0) {
     agent_restore_stdin();
-    printf("\r\n");  // pretty
+    printf("\r");  // pretty
     log_info("exit");
     exit(EXIT_SUCCESS);
   }

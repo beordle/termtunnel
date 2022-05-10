@@ -19,4 +19,7 @@ extern int get_state_mode();
 extern int set_server_process();
 extern int set_client_process();
 extern int set_agent_process();
+extern int termtunnel_state_init();
+extern int get_running_task_count();
+extern void set_running_task_changed(int value);
 #endif

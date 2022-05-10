@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+#include "state.h"
 #include "config.h"
 #include "intent.h"
 #include "log.h"
@@ -120,6 +120,7 @@ int file_sender_start() {
 }
 
 static int file_send_request(path_exchange_t *pe) {
+  set_running_task_changed(1);
   int nfd = vnet_tcp_connect(receiver_service_port);
   log_debug("open local %s to send file %s", pe->src_path, pe->dst_path);
   vnet_send(nfd, pe->dst_path, strlen(pe->dst_path) + 1);  // with_zero_as_split
@@ -146,10 +147,12 @@ static int file_send_request(path_exchange_t *pe) {
   // check path is exist, file can writeable.
   vnet_close(nfd);
   close(fd);
+  set_running_task_changed(-1);
   return 0;
 }
 
 int file_send_start(char *src_path, char *dst_path) {
+
   path_exchange_t *pe = (path_exchange_t *)malloc(sizeof(path_exchange_t));
   strcpy(pe->src_path, src_path);
   strcpy(pe->dst_path, dst_path);
@@ -173,6 +176,7 @@ int file_send_start(char *src_path, char *dst_path) {
 }
 
 static int file_recv_request(path_exchange_t *pe) {
+  set_running_task_changed(1);
   int nfd = vnet_tcp_connect(sender_service_port);
   vnet_send(nfd, pe->src_path, strlen(pe->src_path) + 1);  // with_zero_as_split
   log_info("open %s for write to recv", pe->dst_path);
@@ -201,6 +205,7 @@ static int file_recv_request(path_exchange_t *pe) {
   // TODO(jdz) check path is exist, file can writeable.
   vnet_close(nfd);
   close(fd);
+  set_running_task_changed(-1);
   return 0;
 }
 
