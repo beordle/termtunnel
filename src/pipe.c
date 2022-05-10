@@ -136,7 +136,7 @@ int vnet_notify_to_libuv(char *buf, size_t size) {
   f->buf = memdup(buf, size);
   f->len = size;
   queue_put(q, f);
-  log_info("add queue");
+  // log_info("add queue");
   data_income_notify.data = 1;  // set dry
   int r = uv_async_send(&data_income_notify);
   return 0;

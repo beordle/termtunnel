@@ -37,6 +37,9 @@ struct lwip_sockaddr_in {
   char sin_zero[SIN_ZERO_LEN];
 };
 
+
+
+
 static int port_forward_static_service_port = 7000;
 
 typedef struct port_listen {
@@ -47,12 +50,12 @@ typedef struct port_listen {
 
 static void portforward_static_server_request(void *p) {
   int sd = (int)p;
-  set_vnet_socket_nodelay(sd);
+  vnet_setsocketdefaultopt(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
   CHECK(sd >= 0, "sd: %d", sd);
   int readbytes = 0;
-
+  //TODO (jdz) readn
   do {
     n = lwip_read(sd, recv_buf + readbytes, 1);
     if (n <= 0) {
@@ -63,7 +66,7 @@ static void portforward_static_server_request(void *p) {
     readbytes += 1;
   } while (*(recv_buf + readbytes - 1) != '\0');
   char *host = strdup(recv_buf);
-  log_info("target %s", host);
+
   readbytes = 0;
   do {
     n = lwip_read(sd, recv_buf + readbytes, sizeof(uint16_t));
@@ -76,9 +79,7 @@ static void portforward_static_server_request(void *p) {
   uint16_t port = ntohs(*((uint16_t *)(recv_buf)));
 
   log_info("target %s %hu", host, port);
-  // TODO(jdz) real connect the ip port or listen ip port
-  // -L -R 30 80
-  // connect first
+
   int sock;
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
     lwip_close(sd);
@@ -89,31 +90,29 @@ static void portforward_static_server_request(void *p) {
   struct addrinfo *res;
   snprintf(portaddr, sizeof(portaddr), "%d", port);
 
-
-  struct hostent *shes = gethostbyname(host);
-  if (!shes) {
+  char* ip = safe_gethostbyname(host, port);
+  if (ip == NULL) {
     close(sock);
     lwip_close(sd);
     return;
   }
-  free(host);
-  // TODO(jdz) thread safe
-  host = inet_ntoa(*(struct in_addr*)shes->h_addr);
-  log_info("use ip %s:%hu for domain", host, port);
-  struct sockaddr_in addr;
 
+  log_info("use ip %s:%hu for domain", ip, port);
+  struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
 #ifdef __APPLE__
   addr.sin_len = sizeof(addr);
 #endif
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
-  addr.sin_addr.s_addr = inet_addr(host);
-  /* connect */
-  log_info("start connect %s:%hu", host, port);
+  addr.sin_addr.s_addr = inet_addr(ip);
+
+  log_info("start connect %s:%hu", ip, port);
+  free(ip);
   int ret = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
   if (ret != 0) {
     lwip_close(sd);
+    close(sock);
     log_info("connect error return %d errno:%d %s", ret, errno,
              strerror(errno));
     return;
@@ -156,7 +155,7 @@ static void loop_lwipsocket_to_socket(int *arg) {
     }
     log_info("select ret %d", ret);
     if (!FD_ISSET(lwip_fd, &fdset)) {
-      // return;
+      // pass
     }
     int r = lwip_recv(lwip_fd, buf, READ_CHUNK_SIZE,
                       MSG_DONTWAIT);
@@ -171,11 +170,13 @@ static void loop_lwipsocket_to_socket(int *arg) {
     }
     log_info("write expect %d %d", fd, r);
     int writebytes = write(fd, buf, r);
-    log_info("writeed %d", writebytes);
+    log_info("written %d", writebytes);
     if (writebytes < 0) {
+      lwip_shutdown(lwip_fd, SHUT_RDWR);
       return;
     }
     if (writebytes == 0) {
+      lwip_shutdown(lwip_fd, SHUT_RDWR);
       return;
     }
   }
@@ -187,7 +188,31 @@ static void loop_socket_to_lwipsocket(int *arg) {
   int fd = arg[1];
   while (true) {
     char buf[READ_CHUNK_SIZE];
-    int r = read(fd, buf, READ_CHUNK_SIZE); //TODO
+
+    fd_set fdset;
+    FD_ZERO(&fdset);
+    FD_SET(fd, &fdset);
+    struct timeval tv;
+    tv.tv_usec = 500;
+    tv.tv_sec = 0;
+    int ret = select(fd + 1, &fdset, NULL, NULL, &tv);
+    if (ret < 0) {
+      if (errno == EINTR) continue;
+      if (errno == EBADF) {
+        log_fatal("fd: %d", fd);
+        return;  // TODO(jdz) fix
+      }
+      CHECK(ret > 0, "select ret:%d %s", ret, strerror(errno));
+    }
+    if (ret == 0) {
+      continue;
+    }
+    log_info("select ret %d", ret);
+    if (!FD_ISSET(fd, &fdset)) {
+      // pass
+    }
+    // TODO 这中间可能被close 导致read到 无效的fd
+    int r = read(fd, buf, READ_CHUNK_SIZE);  // TODO
     if (r < 0) {
       lwip_shutdown(lwip_fd, SHUT_RDWR);  // TODO(jdz) 最好去掉
       return;
@@ -199,9 +224,13 @@ static void loop_socket_to_lwipsocket(int *arg) {
 
     int writebytes = lwip_write(lwip_fd, buf, r);
     if (writebytes < 0) {
+      close(fd);
+      lwip_close(lwip_fd);
       return;
     }
     if (writebytes == 0) {
+      close(fd);
+      lwip_close(lwip_fd);
       return;
     }
     log_info("lwip_write %d %d", r, writebytes);
@@ -218,6 +247,8 @@ int pipe_lwip_socket_and_socket_pair(int lwip_fd, int fd) {
   pthread_create(&worker2, NULL, &loop_socket_to_lwipsocket, (void *)array);
   loop_lwipsocket_to_socket((void *)array);
   pthread_join(worker2, NULL);
+  log_info("lwip ip pair %d %d", lwip_fd, fd);
+  free(array);
   return 0;
 }
 
@@ -298,7 +329,7 @@ int portforward_static_start(char *src_host, uint16_t src_port, char *dst_host,
       comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind local port error\n"),
                               sizeof("bind local port error\n"));
     }
-    return 0;
+    goto fail;
   }
   ret = listen(sock, 20);
   if (ret != 0) {
@@ -308,7 +339,7 @@ int portforward_static_start(char *src_host, uint16_t src_port, char *dst_host,
       comm_write_packet_to_cli(COMMAND_RETURN, strdup("listen error\n"),
                              sizeof("listen error\n"));
     }
-    return 0;
+    goto fail;
   }
 
   port_listen_t *pe = (port_listen_t *)malloc(sizeof(port_listen_t));
@@ -324,5 +355,9 @@ int portforward_static_start(char *src_host, uint16_t src_port, char *dst_host,
 
   sys_thread_new("portforward_static", portforward_service_handler, (void *)pe,
                  DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
+  return 0;
+
+  fail:
+  close(sock);
   return 0;
 }

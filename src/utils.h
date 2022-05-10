@@ -9,7 +9,7 @@
 
 #define TERMTUNNEL_UTILS_H
 #include <assert.h>
-
+#include <stdint.h>
 #include "log.h"
 #define CHECK(x, ...)       \
   if (!(x)) {               \
@@ -22,4 +22,5 @@ extern void set_stdin_raw();
 extern void restore_stdin();
 extern void *memdup(const void *src, size_t n);
 extern const char *green_encode(const char *buf, int len, int *result_len);
+extern char* safe_gethostbyname(char *buf, uint16_t port);
 #endif

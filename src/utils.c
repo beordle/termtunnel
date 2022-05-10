@@ -9,7 +9,12 @@
 
 #define TERMTUNNEL_UTILS_H
 #include "utils.h"
-
+#include "log.h"
+#include <arpa/inet.h>
+#include <ctype.h>
+#include <errno.h>
+#include <netdb.h>
+#include <netinet/tcp.h>
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -93,5 +98,34 @@ void set_stdin_raw() {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &ttystate);
   _stdin_is_raw = true;
 }
+
+
+char* safe_gethostbyname(char *host, uint16_t port) {
+    log_info("gethostbyname %s:%hu", host, port);
+    char portaddr[6];
+    struct addrinfo *res;
+    snprintf(portaddr, sizeof(portaddr), "%d", port);
+    int ret = getaddrinfo((char *)host, portaddr, NULL, &res);
+    if (ret == EAI_NODATA) {
+      printf("gethostbyname EAI_NODATA");
+      return NULL;
+    } else if (ret == 0) {
+      struct addrinfo *r;
+      for (r = res; r != NULL; r = r->ai_next) {
+        // TODO(jdz) if == ipv4 
+        // int fd = socket(r->ai_family, r->ai_socktype, r->ai_protocol);
+        struct sockaddr_in *addr;
+        addr = (struct sockaddr_in *)r->ai_addr;
+        char *ret = malloc(INET_ADDRSTRLEN);
+        inet_ntop(AF_INET, &(addr->sin_addr), ret, INET_ADDRSTRLEN);
+        // inet_pton(AF_INET, "192.0.2.33", &(sa.sin_addr));
+        freeaddrinfo(res);
+        return ret;
+    }
+    freeaddrinfo(res);
+    }
+    return NULL;
+}
+
 
 #endif
