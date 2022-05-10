@@ -10,6 +10,7 @@ jobs:
     name: Bump Homebrew formula
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
       - uses: ./.github/workflows/codeql-analysis.yml
       - uses: mislav/bump-homebrew-formula-action@v2
         with:
