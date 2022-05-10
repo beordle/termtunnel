@@ -82,6 +82,7 @@ void cli_loop(int in, int out, int argc, const char *argv[]) {
   while (true) {
     interact_run(in, out);
     kill(getpid(), SIGWINCH);
+    // one shot 需要由 agent设定，然后传输给server，再控制到 client的行为。
     bool one_shot_mode = false;
     if (one_shot_mode) {
       // one shot 仅由 cli 做出解释处理，不影响 server
