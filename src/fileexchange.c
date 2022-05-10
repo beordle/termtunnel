@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+#include "state.h"
 #include "config.h"
 #include "intent.h"
 #include "log.h"
@@ -37,12 +37,12 @@ typedef struct path_exchange {
 
 static int file_receiver_request(void *p) {
   int sd = (int)p;
-  set_vnet_socket_nodelay(sd);
+  vnet_setsocketdefaultopt(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
   log_info("sd: %d", sd);
   if (vnet_readstring(sd, recv_buf, READ_CHUNK_SIZE) == 0) {
-    close(sd);
+    lwip_close(sd);
     return 0;
   }
   char *target_file_path = recv_buf;
@@ -77,12 +77,12 @@ int file_receiver_start() {
 
 static int file_sender_request(void *p) {
   int sd = (int)p;
-  set_vnet_socket_nodelay(sd);
+  vnet_setsocketdefaultopt(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
   log_info("sd: %d", sd);
   if (vnet_readstring(sd, recv_buf, READ_CHUNK_SIZE) == 0) {
-    close(sd);
+    lwip_close(sd);
     return 0;
   }
   char *target_file_path = recv_buf;

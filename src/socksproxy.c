@@ -25,7 +25,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-
+#include "utils.h"
 #include "log.h"
 #include "portforward.h"
 #include "vclient.h"
@@ -75,7 +75,8 @@ int readn(int fd, void *buf, int n) {
   return n;
 }
 
-static int writen(int fd, void *buf, int n) {
+
+static int lwip_writen(int fd, void *buf, int n) {
   int nwrite, left = n;
   while (left > 0) {
     if ((nwrite = lwip_write(fd, buf, left)) == -1) {
@@ -113,9 +114,12 @@ int readtocharR(int fd, char *buf, int bufsize) {
 }
 
 int report_error_to_client(int fd, char *message) {
+  if (message == NULL) {
+        message = "(null)";
+  }
   char buffer[512];
-  snprintf(buffer, sizeof(buffer), "HTTP/1.1 500 %s\r\n\r\n", message);
-  writen(fd, buffer, strlen(buffer));
+  snprintf(buffer, sizeof(buffer), "HTTP/1.1 500 Internal Server Error %s\r\n\r\n", message);
+  lwip_writen(fd, buffer, strlen(buffer));
 }
 
 int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
@@ -158,7 +162,7 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
   // printf("cmd:[%s]\n",cmd);
   if (strcmp(cmd, "GET") && strcmp(cmd, "POST") && strcmp(cmd, "CONNECT")) {
     report_error_to_client(fd, "This command is not supported");
-    close(fd);
+    lwip_close(fd);  // TODO (jdz) 遗留bug
     return 0;
   }
 
@@ -204,23 +208,25 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
     log_info("socket error");
     return 0;
   }
-
-  struct hostent *shes = gethostbyname(host);
-  if (!shes) {
-    report_error_to_client(fd, hstrerror(h_errno));
-    close(fd);
+  char* ip = safe_gethostbyname(host, port);
+  if (ip == NULL) {
+    log_info("safe_gethostbyname empty ip");
+    report_error_to_client(fd, "empty ip");
+    lwip_close(fd);
+    close(rfd);
     return 0;
   }
   struct sockaddr_in sin;
   sin.sin_family = AF_INET;
-  bcopy(shes->h_addr, &sin.sin_addr, sizeof(struct in_addr));
+  sin.sin_addr.s_addr = inet_addr(ip);
+  free(ip);
   sin.sin_port = htons(port);
   if (connect(rfd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in)) < 0) {
-    report_error_to_client(fd, strerror(buf2));
+    report_error_to_client(fd, strerror(errno));
     lwip_close(fd);
+    close(rfd);
     return 0;
   }
-
   if (strcmp(cmd, "CONNECT") != 0) {
     sprintf(buf2, "%s %s\n", cmd, url);
     if (write(rfd, buf2, strlen(buf2)) < 1) {
@@ -230,7 +236,7 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
     }
   } else {
     char *reply = "HTTP/1.1 200 Connection Established\r\n\r\n";
-    if (writen(fd, reply, strlen(reply)) < 1) {
+    if (lwip_writen(fd, reply, strlen(reply)) < 1) {
       lwip_close(fd);
       close(rfd);
       return 0;
@@ -283,42 +289,27 @@ int app_connect(int type, void *buf, unsigned short int portnum) {
 
     return fd;
   } else if (type == DOMAIN) {
-    char portaddr[6];
-    struct addrinfo *res;
-    snprintf(portaddr, ARRAY_SIZE(portaddr), "%d", portnum);
-    log_info("getaddrinfo: %s %s", (char *)buf, portaddr);
-    int ret = getaddrinfo((char *)buf, portaddr, NULL, &res);
-    log_info("getaddrinfo done");
-    if (ret == EAI_NODATA) {
+
+    char* ip = safe_gethostbyname(buf, portnum);
+    if (ip == NULL) {
+      log_info("safe_gethostbyname empty ip");
+      close(fd);
       return -1;
-    } else if (ret == 0) {
-      struct addrinfo *r;
-      for (r = res; r != NULL; r = r->ai_next) {
-        fd = socket(r->ai_family, r->ai_socktype, r->ai_protocol);
-        if (fd == -1) {
-          continue;
-        }
-        log_info("connect host");
-        struct sockaddr_in *addr;
-        addr = (struct sockaddr_in *)r->ai_addr;
-        log_info("port %hu", ntohs(addr->sin_port));
-        log_info("inet_ntoa(in_addr)sin = %s\n",
-                 inet_ntoa((struct in_addr)addr->sin_addr));
-
-        ret = connect(fd, r->ai_addr, r->ai_addrlen);
-        if (ret == 0) {
-          log_info("connect host succ %d", fd);
-          freeaddrinfo(res);
-          return fd;
-        } else {
-          close(fd);
-        }
-      }
     }
-    freeaddrinfo(res);
-    return -1;
+    log_info("connect %s:%hu",ip, portnum);
+    memset(&remote, 0, sizeof(remote));
+    remote.sin_family = AF_INET;
+    remote.sin_addr.s_addr = inet_addr(ip);
+    free(ip);
+    remote.sin_port = htons(portnum);
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (connect(fd, (struct sockaddr *)&remote, sizeof(struct sockaddr_in)) < 0) {
+      log_info("connect() in app_connect");
+      close(fd);
+      return -1;
+    }
+    return fd;
   }
-
   return -1;
 }
 
@@ -358,7 +349,7 @@ char *socks5_auth_get_pass(int fd) {
 
 int socks5_auth_userpass(int fd) {
   char answer[2] = {VERSION5, USERPASS};
-  writen(fd, (void *)answer, ARRAY_SIZE(answer));
+  lwip_writen(fd, (void *)answer, ARRAY_SIZE(answer));
   char resp;
   readn(fd, (void *)&resp, sizeof(resp));
   log_info("auth %hhX", resp);
@@ -368,13 +359,13 @@ int socks5_auth_userpass(int fd) {
   if (strcmp(arg_username, username) == 0 &&
       strcmp(arg_password, password) == 0) {
     char answer[2] = {AUTH_VERSION, AUTH_OK};
-    writen(fd, (void *)answer, ARRAY_SIZE(answer));
+    lwip_writen(fd, (void *)answer, ARRAY_SIZE(answer));
     free(username);
     free(password);
     return 0;
   } else {
     char answer[2] = {AUTH_VERSION, AUTH_FAIL};
-    writen(fd, (void *)answer, ARRAY_SIZE(answer));
+    lwip_writen(fd, (void *)answer, ARRAY_SIZE(answer));
     free(username);
     free(password);
     return 1;
@@ -383,13 +374,13 @@ int socks5_auth_userpass(int fd) {
 
 int socks5_auth_noauth(int fd) {
   char answer[2] = {VERSION5, NOAUTH};
-  writen(fd, (void *)answer, ARRAY_SIZE(answer));
+  lwip_writen(fd, (void *)answer, ARRAY_SIZE(answer));
   return 0;
 }
 
 void socks5_auth_notsupported(int fd) {
   char answer[2] = {VERSION5, NOMETHOD};
-  writen(fd, (void *)answer, ARRAY_SIZE(answer));
+  lwip_writen(fd, (void *)answer, ARRAY_SIZE(answer));
 }
 
 void socks5_auth(int fd, int methods_count) {
@@ -447,9 +438,9 @@ char *socks_ip_read(int fd) {
 
 void socks5_ip_send_response(int fd, char *ip, unsigned short int port) {
   char response[4] = {VERSION5, OK, RESERVED, IP};
-  writen(fd, (void *)response, ARRAY_SIZE(response));
-  writen(fd, (void *)ip, IPSIZE);
-  writen(fd, (void *)&port, sizeof(port));
+  lwip_writen(fd, (void *)response, ARRAY_SIZE(response));
+  lwip_writen(fd, (void *)ip, IPSIZE);
+  lwip_writen(fd, (void *)&port, sizeof(port));
 }
 
 char *socks5_domain_read(int fd, unsigned char *size) {
@@ -472,32 +463,14 @@ void socks5_ip_send_response(int fd, char *ip, unsigned short int port)
         writen(fd, (void *)&port, sizeof(port));
 }
 */
-
 void socks5_domain_send_response(int fd, char *domain, unsigned char size,
-                                 uint16_t port) {
-  char response[4] = {VERSION5, OK, RESERVED, IP};
-  writen(fd, (void *)response, sizeof(response));
-#if 0
-	buf->data[0] = 0x5;
-	buf->data[1] = 0x0;
-	buf->data[2] = 0x0;
-	buf->data[3] = 0x1;
-	int s_addr = inet_aton("0.0.0.0", NULL);
-	uint32_t us_addr = htonl(s_addr);
-	memcpy(&buf->data[4], &us_addr, 4);
-	buf->data[4] = 0x1;
-	buf->data[4 + 4] = 0x19;
-	buf->data[4 + 5] = 0x19;
-	buf->used = 10;
-#endif
-  char buf[4];
-  int s_addr = inet_aton("0.0.0.0", NULL);
-  uint32_t us_addr = htonl(s_addr);
-  memcpy(buf, &us_addr, 4);
-  buf[0] = 0x1;
-  writen(fd, (void *)buf, sizeof(buf));
-  // writen(fd, (void *)domain, size * sizeof(char));
-  writen(fd, (void *)&port, sizeof(port));
+                                 unsigned short int port)
+{
+  char response[4] = { VERSION5, OK, RESERVED, DOMAIN };
+  lwip_writen(fd, (void *)response, ARRAY_SIZE(response));
+  lwip_writen(fd, (void *)&size, sizeof(size));
+  lwip_writen(fd, (void *)domain, size * sizeof(char));
+  lwip_writen(fd, (void *)&port, sizeof(port));
 }
 
 int socks4_is_4a(char *ip) {
@@ -529,12 +502,12 @@ int socks4_read_nstring(int fd, char *buf, int size) {
 
 void socks4_send_response(int fd, int status) {
   char resp[8] = {0x00, (char)status, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  writen(fd, (void *)resp, ARRAY_SIZE(resp));
+  lwip_writen(fd, (void *)resp, ARRAY_SIZE(resp));
 }
 
 void *app_thread_process(void *fd) {
   int net_fd = (int)fd;
-  set_vnet_socket_nodelay(net_fd);
+  vnet_setsocketdefaultopt(net_fd);
   int version = 0;
   int inet_fd = -1;
   char header[255];

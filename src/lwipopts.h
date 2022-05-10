@@ -135,6 +135,7 @@ a lot of data that needs to be copied, this should be set high. */
 #define LWIP_TCP 1
 #define TCP_TTL 255
 
+#define LWIP_TCP_KEEPALIVE  1
 /* Controls if TCP should queue segments that arrive out of
    order. Define to 0 if your device is low on memory. */
 #define TCP_QUEUE_OOSEQ 1

@@ -42,10 +42,12 @@ char *server_ip = "192.168.1.111";
 
 int16_t listen_port = 700;
 
-void set_vnet_socket_nodelay(int nfd) {
-  int flags = 1;
-  size_t flglen = sizeof(flags);
-  lwip_setsockopt(nfd, SOL_SOCKET, TCP_NODELAY, &flags, &flglen);
+void vnet_setsocketdefaultopt(int nfd) {
+  int flags;
+  flags = 1;
+  lwip_setsockopt(nfd, SOL_SOCKET, TCP_NODELAY, &flags, sizeof(flags));
+  flags = 1;
+  lwip_setsockopt(nfd, SOL_SOCKET, SO_KEEPALIVE, &flags, sizeof(flags));
 }
 
 
@@ -137,7 +139,7 @@ int vnet_tcp_connect(uint16_t port) {
   addr.sin_family = AF_INET;
   addr.sin_port = lwip_htons(port);
   addr.sin_addr.s_addr = inet_addr(server_ip);
-  set_vnet_socket_nodelay(s);
+  vnet_setsocketdefaultopt(s);
   /* connect */
   int ret = lwip_connect(s, (struct sockaddr *)&addr, sizeof(addr));
   if (ret == 0) {

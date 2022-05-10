@@ -187,11 +187,11 @@ int agent_process_frame(char *str_data, int data_size) {
     log_error("empty packet");
     return 0;
   }
-  log_trace("process_frame %*s\n", data_size, str_data);
+  // log_trace("process_frame %*s\n", data_size, str_data);
   // simple command
   if (data_size == strlen("EXIT") && strcmp(str_data, "EXIT") == 0) {
     agent_restore_stdin();
-    printf("\r\n");  // pretty
+    printf("\r");  // pretty
     log_info("exit");
     exit(EXIT_SUCCESS);
   }

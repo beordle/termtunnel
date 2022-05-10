@@ -10,6 +10,7 @@
 #define TERMTUNNEL_UTILS_H
 #include <assert.h>
 #include <pthread.h>
+#include <stdint.h>
 #include "log.h"
 #define CHECK(x, ...)       \
   if (!(x)) {               \
@@ -35,4 +36,5 @@ extern void utils_counter_increment_by(struct counter_t *c, int by);
 extern void utils_counter_increment(struct counter_t *c);
 extern int utils_counter_get(struct counter_t *c);
 
+extern char* safe_gethostbyname(char *buf, uint16_t port);
 #endif
