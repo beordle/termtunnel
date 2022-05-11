@@ -4,7 +4,9 @@
  * This software is released under the MIT License.
  * https://opensource.org/licenses/MIT
  */
-
+#define _GNU_SOURCE
+#include <sys/types.h>
+#include <sys/socket.h>
 #include "utils.h"
 #include "log.h"
 #include <arpa/inet.h>
