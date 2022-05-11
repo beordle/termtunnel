@@ -118,6 +118,7 @@ void uvloop_process_income(uv_async_t *handle) {
 
     if (get_state_mode() == MODE_SERVER_PROCESS) {
       if (!server_see_agent_is_repl) {
+        queue_unlock_internal(q);
         return;
       }
       send_base64binary_to_agent(f->buf, f->len);
