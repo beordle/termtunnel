@@ -69,6 +69,7 @@ thirdparty/queue/queue.c
 thirdparty/queue/queue_internal.c
 thirdparty/setproctitle.c
 thirdparty/tinyfiledialogs/tinyfiledialogs.c
+thirdparty/ya_getopt/ya_getopt.c
 )
 
 IF (CYGWIN)  # cygwin use system default libuv without epoll.

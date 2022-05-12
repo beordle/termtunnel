@@ -341,7 +341,9 @@ int download_func(int argc, char **argv) {
   return 0;
 }
 
-int exit_func(int argc, char **argv) { return -1; }
+int exit_func(int argc, char **argv) {
+  return -1; 
+}
 
 int command_not_found(int argc, char **argv) {
   printf("command %s not found, type help to show command list.\n", argv[0]);
@@ -420,7 +422,7 @@ void repl_run(int _in, int _out) {
   char *line;
   in = _in;
   out = _out;
-
+  repl:
   while ((line = linenoise("termtunnel> ")) != NULL) {
     /* Do something with the string. */
     // printf("line[%s] %p\n",line,line);
@@ -436,6 +438,22 @@ void repl_run(int _in, int _out) {
     }
     free(line);
   }
+  send_binary(out, COMMAND_GET_RUNNING_TASK_COUNT, NULL, 0);
+  int type;
+  char *buf;
+  int64_t size;
+  recv_data(in, &type, &buf, &size);
+  int count = *(int*)buf;
+  if (count != 0) {
+    printf("number of running task: %d\n", count);
+    free(buf);
+    goto repl;
+  }
+  if (type == COMMAND_RETURN) {
+  }
+  free(buf);
+
+
   // TODO 支持环境变量设置只读，不保存history
   linenoiseHistorySave(command_history_file);
 

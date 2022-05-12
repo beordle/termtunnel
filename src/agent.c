@@ -19,6 +19,7 @@
 #include "pipe.h"
 #include "state.h"
 #include "thirdparty/base64.h"
+#include "thirdparty/ya_getopt/ya_getopt.h"
 #include "utils.h"
 #include "uv.h"
 #include "vnet.h"
@@ -252,14 +253,36 @@ void agent_write_data_to_server(char *buf, size_t s, bool autofree) {
   }
 }
 
-void agent() {
+static void sigint_handler(int sig) {
+  exit(0);
+  return;
+}
+
+void agent(int argc, char** argv) {
+  /** if (argc != 0) {
+    // printf("argv %s\n", argv[0]);
+    // 我们仍旧预期这是一个标准参数列表。因为后续我们要支持如同 busybox 一样的能力。
+    // termtunnel -- rz -bye
+    /*int opt = 0;
+    bool p_g_confix = false;
+    while ((opt = ya_getopt(argc, argv, "l:r:dvchr:g:p::")) != -1)
+    {
+        switch (opt)
+        {
+          
+        }
+    }
+  }*/
+  // 判断是否使用 oneshot 模式
   set_agent_process();
   setvbuf(stdin, NULL, _IONBF, 0);
   agent_set_stdin_noecho();
   atexit(agent_restore_stdin);
+  signal(SIGINT, sigint_handler);
   int len_result;
   char *result = green_encode("MAGIC!", strlen("MAGIC!"), &len_result);
-  printf("%s\r\n", result);
+  usleep(2000);  // 防止粘连，优化显示的目的。 
+  writen(STDOUT_FILENO, result, len_result);
   free(result);
 
   static uv_timer_t timer_watcher;

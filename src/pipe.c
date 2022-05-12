@@ -383,7 +383,7 @@ int push_data() {
 
 void timer_callback() {
 
-  log_info("get_running_task_count %d", get_running_task_count());
+  //log_info("get_running_task_count %d", get_running_task_count());
   // 如果队列没有清空，那么就提醒一下。因为async_send是一个不可靠的提醒，另外，提醒后，因为没有逻辑锁，会出现：
   // uv_aysnc_send:call queue_pop queue_push 的情况，从而导致残留
 #ifdef FLUASH_QUEUE_ON_TIMER
@@ -552,10 +552,11 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
       break;
     }
     case COMMAND_GET_RUNNING_TASK_COUNT: {
-      
-      get_running_task_count();
-      //comm_write_packet_to_cli(COMMAND_RETURN, strdup("bind done (guess)\n"),
-      //                        sizeof("bind done (guess)\n"));
+
+      int c = get_running_task_count();
+      void *dup_cptr = memdup(&c, sizeof(c));
+      comm_write_packet_to_cli(COMMAND_RETURN, dup_cptr, sizeof(c));
+      break;
     }
     case COMMAND_PORT_FORWARD: {
       port_forward_intent_t *a = (port_forward_intent_t *)buf;

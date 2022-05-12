@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2022 Jindong Zhang
- * 
+ *
  * This software is released under the MIT License.
  * https://opensource.org/licenses/MIT
  */
@@ -33,9 +33,9 @@
 #include "portforward.h"
 #include "pty.h"
 #include "repl.h"
-#include "thirdparty/setproctitle.h"
 #include "state.h"
 #include "thirdparty/base64.h"
+#include "thirdparty/setproctitle.h"
 #include "utils.h"
 #include "vnet.h"
 
@@ -76,7 +76,6 @@ static void on_resize(int signum) {
               sizeof(struct winsize));
 }
 
-
 void cli_loop(int in, int out, int argc, const char *argv[]) {
   repl_init();
   while (true) {
@@ -86,7 +85,7 @@ void cli_loop(int in, int out, int argc, const char *argv[]) {
     bool one_shot_mode = false;
     if (one_shot_mode) {
       // one shot 仅由 cli 做出解释处理，不影响 server
-      //printf("oneshot!\n");
+      // printf("oneshot!\n");
     } else {
       repl_run(in, out);
     }
@@ -140,16 +139,18 @@ int main(int argc, const char *argv[]) {
     }
   }
   termtunnel_state_init();
-  q = queue_create();
-  // spt_init(argc, argv);
 
+  // spt_init(argc, argv);
+  // 其实这里仿照 lldb -- 去启动应用可能会更好？
   // if run as agent
-  if (argc == 2 && strcmp(argv[1], "-a") == 0) {
+  if (argc >= 2 && (strcmp(argv[1], "-a") == 0 || strcmp(argv[1], "--") == 0)) {
     log_info("agent pid %d", getpid());
-    agent();
+    argv+= 2;
+    agent(argc - 2, argv);
     return 0;
   }
 
+  q = queue_create();
   if (pipe(in_fd) == -1) {
     perror("Cannot create the pipe");
     exit(EXIT_FAILURE);
