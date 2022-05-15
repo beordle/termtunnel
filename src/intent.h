@@ -31,6 +31,9 @@
 #define COMMAND_GET_RUNNING_TASK_COUNT 10
 #define COMMAND_GET_ARGS 11
 #define COMMAND_GET_ARGS_REPLY 12
+
+# define FLAG_ONESHOT 1<<0
+
 typedef struct ci {
   int i;
   int mode;

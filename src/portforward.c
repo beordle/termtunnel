@@ -253,7 +253,6 @@ int pipe_lwip_socket_and_socket_pair(int lwip_fd, int fd) {
 }
 
 void portforward_static_server_pipe(port_listen_t *pe) {
-  // accept
   log_info("connect %s", pe->host);
   int lwip_fd = vnet_tcp_connect(port_forward_static_service_port);
   vnet_send(lwip_fd, pe->host, strlen(pe->host) + 1);  // with_zero_as_split
@@ -261,7 +260,6 @@ void portforward_static_server_pipe(port_listen_t *pe) {
   vnet_send(lwip_fd, &tmp, sizeof(uint16_t));
   log_info("connect sent %s, do pipe", pe->host);
   pipe_lwip_socket_and_socket_pair(lwip_fd, pe->local_fd);
-  log_info("do pipe done", pe->host);
   close(pe->local_fd);
   free(pe);
   int ret = lwip_close(lwip_fd);
@@ -282,6 +280,7 @@ void portforward_transparent_server_pipe(port_listen_t *pe) {
 static void portforward_service_handler(port_listen_t *pe) {
   int new_sd;
   int listen_fd = pe->local_fd;
+  // set_running_task_changed(1);
   while (true) {
     if ((new_sd = accept(listen_fd, NULL, NULL)) >= 0) {
       pthread_t *worker = (pthread_t *)malloc(sizeof(pthread_t));  // TODO(jdz)  free
@@ -293,11 +292,13 @@ static void portforward_service_handler(port_listen_t *pe) {
         pthread_create(worker, NULL, &portforward_transparent_server_pipe, (void *)child_pe);
       } else {
         pthread_create(worker, NULL, &portforward_static_server_pipe, (void *)child_pe);
-      }
+      } 
+
     } else {
       log_info("abort the accept");
     }
   }
+  // set_running_task_changed(-1);
   return;
 }
 

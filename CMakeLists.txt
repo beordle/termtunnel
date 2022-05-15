@@ -81,3 +81,4 @@ ENDIF()
 if (LINUX)
     target_link_libraries(termtunnel PUBLIC "-static")
 endif()
+
