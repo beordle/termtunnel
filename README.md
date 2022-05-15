@@ -75,7 +75,7 @@ termtunnel>> help
 
 > use a local GUI VNC client to connect it!
 #### ONESHOT mode
-> you can directly run `termtunnel local_listen 127.0.0.1 80 127.0.0.1 0`, `termtunnel -- rz` or `termtunnel -- sz path\to\file`. in terminal, the corresponding action will be started immediately without entering a session.
+> you can directly run `termtunnel -- local_listen 127.0.0.1 80 127.0.0.1 0`, `termtunnel -- rz` or `termtunnel -- sz path\to\file`. in terminal, the corresponding action will be started immediately without entering a session.
  
 
 
