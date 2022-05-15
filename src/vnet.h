@@ -22,4 +22,5 @@ int lwip_writen(int fd, void *buf, int n);
 void vnet_setsocketdefaultopt(int nfd);
 int vnet_readn(int fd, void *buf, int n);
 int vnet_readstring(int fd, char *buf, int n);
+int vnet_tcp_connect_with_retry(uint16_t port);
 #endif

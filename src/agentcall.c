@@ -84,7 +84,7 @@ int agentcall_server_start() {
 }
 
 static void call_send_request(thread_arg_pass_t *tmp) {
-  int nfd = vnet_tcp_connect(agentcall_service_port);
+  int nfd = vnet_tcp_connect_with_retry(agentcall_service_port);
   if (nfd < 0) {
     log_debug("connect agentcall_service_port error");
     return;
@@ -98,7 +98,8 @@ static void call_send_request(thread_arg_pass_t *tmp) {
 
 
 int bootstrap_get_args(void * _) {
-  int nfd = vnet_tcp_connect(agentcall_service_port);
+  // 确实 agentcall_service_port 会概率性失败..
+  int nfd = vnet_tcp_connect_with_retry(agentcall_service_port);
   if (nfd < 0) {
     log_debug("connect agentcall_service_port error");
     return 0;

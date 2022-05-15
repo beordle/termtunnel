@@ -84,7 +84,7 @@ ssize_t expect_read(int fd, char *buf, size_t expect_size) {
   return expect_size;
 }
 
-void recv_data(int fd, int *type, char **retbuf, int64_t *sz) {
+void recv_data(int fd, int64_t *type, char **retbuf, int64_t *sz) {
   char *buf = (char *)malloc(sizeof(int64_t));
   *sz = 0;
   int a = expect_read(fd, buf, sizeof(int64_t));
@@ -93,10 +93,8 @@ void recv_data(int fd, int *type, char **retbuf, int64_t *sz) {
     free(buf);
     return;
   }
-  // printf("a==sizeof(int64_t) %d %d\n",a,sizeof(int64_t));
   CHECK(a == sizeof(int64_t), "a: %d", a);
   int64_t msg_size = *((int64_t *)buf);
-  // printf("recv %d",*(int64_t*)buf);
   a = expect_read(fd, buf, sizeof(int64_t));
   if (a == 0) {
     free(buf);
@@ -108,9 +106,9 @@ void recv_data(int fd, int *type, char **retbuf, int64_t *sz) {
   }
   a = expect_read(fd, buf, msg_size);
   CHECK(a == msg_size, "a: %d,msg_size: %lld\n", a, msg_size);
-  // printf("a:%d\n",a);
   *retbuf = buf;
   *sz = msg_size;
+  return;
 }
 
 size_t split(char *buffer, char *argv[], size_t argv_size) {
@@ -206,6 +204,7 @@ typedef struct {
   void *funcptr;
   char *desc;
   char *usage;
+  int flags;
 } actionfinder_t;
 
 int hello_func(int argc, char **argv) {
@@ -261,7 +260,7 @@ int portforward_func(int argc, char **argv) {
   send_binary(out, COMMAND_PORT_FORWARD, a, sizeof(port_forward_intent_t));
   free(a);
 
-  int type;
+  int64_t type;
   char *buf;
   int64_t size;
   recv_data(in, &type, &buf, &size);
@@ -361,17 +360,17 @@ actionfinder_t action_table[] = {
     {"local_listen", portforward_func, "port forward bind on local host",
      "local_listen [local_host] [local_port] [remote_host] [remote_port]\n"
      "when remote_port==0, the service listen on remote_port will be a "
-     "socks5+http proxy server."},
+     "socks5+http proxy server.", NULL},
     {"remote_listen", portforward_func, "port forward bind on remote host",
      "remote_listen [remote_host] [remote_port] [local_host] [local_port]\n"
      "when local_port==0, the service listen on remote_port  will be a "
-     "socks5+http proxy server."},
-    {"upload", upload_func, "upload a file", "usage"},
-    {"rz", upload_func, "alias upload", "usage"},
-    {"download", download_func, "download a file", "usage"},
-    {"sz", download_func, "alias download", "usage"},
-    {"help", help_func, "view help manpage", "usage"},
-    {"exit", exit_func, "exit application", "usage"},
+     "socks5+http proxy server.", NULL},
+    {"upload", upload_func, "upload a file", "usage", FLAG_ONESHOT},
+    {"rz", upload_func, "alias upload", "usage", FLAG_ONESHOT},
+    {"download", download_func, "download a file", "usage", FLAG_ONESHOT},
+    {"sz", download_func, "alias download", "usage", FLAG_ONESHOT},
+    {"help", help_func, "view help manpage", "usage", FLAG_ONESHOT},
+    {"exit", exit_func, "exit application", "usage", NULL},
 };
 
 int help_func(int argc, char **argv) {
@@ -389,6 +388,17 @@ int print_command_usage(char *command_name) {
   for (int i = 0; i < func_count; i++) {
     if (strcmp(command_name, action_table[i].funcname) == 0) {
       printf("%s\n", action_table[i].usage);
+    }
+  }
+  return 0;
+}
+
+
+int get_command_flags(char *command_name) {
+  int func_count = sizeof(action_table) / sizeof(actionfinder_t);
+  for (int i = 0; i < func_count; i++) {
+    if (strcmp(command_name, action_table[i].funcname) == 0) {
+      return action_table[i].flags;
     }
   }
   return 0;
@@ -447,7 +457,7 @@ void repl_run(int _in, int _out) {
   }
   if (ret == -1) {
     send_binary(out, COMMAND_GET_RUNNING_TASK_COUNT, NULL, 0);
-    int type;
+    int64_t type;
     char *buf;
     int64_t size;
     recv_data(in, &type, &buf, &size);
@@ -498,7 +508,7 @@ int update_processbar(float percent, char string[])
 
 int get_server_running_task(){
   send_binary(out, COMMAND_GET_RUNNING_TASK_COUNT, NULL, 0);
-  int type;
+  int64_t type;
   char *buf;
   int64_t size;
   recv_data(in, &type, &buf, &size);
@@ -519,12 +529,19 @@ void oneshot_run(int _in, int _out) {
     update_processbar(i, "11");
     fflush(stdout);
   }*/
+
+  // get args
   send_binary(out, COMMAND_GET_ARGS, NULL, 0);
   char *buf = NULL;
   int64_t size;
   int64_t type = 0;
   recv_data(_in, &type, &buf, &size);
-  // COMMAND_GET_ARGS_REPLY
+  if (type != COMMAND_GET_ARGS_REPLY) {
+    if (buf) {
+      free(buf);
+    }
+      return;
+  }
   int32_t argc = *(int32_t*)buf;
   char* ptr = buf+  sizeof(int32_t);
   char** argv = malloc(sizeof(char*) * argc);
@@ -532,19 +549,31 @@ void oneshot_run(int _in, int _out) {
     argv[i] = ptr;
     ptr += strlen(ptr)+ 1;
   }
+  if (!(get_command_flags(argv[0]) & FLAG_ONESHOT)) {
+    printf("the command is REPL only.\n");
+    goto end;
+  }
+
   repl_execve(argc, argv);
   // spinlock wait
   while (true) {
-    usleep(500000); // TODO 仍有可能极小概率任务还没有开始就开始判定，未来可增加健壮性。
-    if (get_server_running_task() == 0) {
-      free(buf);
-      free(argv);
-      send_binary(out, COMMAND_EXIT_REPL, NULL, 0);
-      return;
+    int ret = usleep(500000);
+    // TODO(jdz) 仍有可能极小概率任务还没有开始就开始判定，未来可增加健壮性。
+    if (ret < 0 && errno == SIGINT) {
+      keyboard_break = true;
+    }
+    if (get_server_running_task() == 0 || keyboard_break) {
+      keyboard_break = false;
+      goto end;
     }
   }
+
+  end:
+  printf("end\n");
   free(argv);
   free(buf);
+  send_binary(out, COMMAND_EXIT_REPL, NULL, 0);
+  return;
 }
 
 

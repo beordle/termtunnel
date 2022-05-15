@@ -40,8 +40,6 @@
 char *agent_ip = "192.168.1.111";
 char *server_ip = "192.168.1.111";
 
-int16_t listen_port = 700;
-
 void vnet_setsocketdefaultopt(int nfd) {
   int flags;
   flags = 1;
@@ -149,6 +147,7 @@ int lwip_writen(int fd, void *buf, int n) {
   return n;
 }
 
+
 int vnet_tcp_connect(uint16_t port) {
   int s = lwip_socket(AF_INET, SOCK_STREAM, 0);
   LWIP_ASSERT("s >= 0", s >= 0);
@@ -163,10 +162,29 @@ int vnet_tcp_connect(uint16_t port) {
   if (ret == 0) {
     return s;
   }
-  log_error("connect failed %d", ret);
+  log_error("connect failed %d %s", ret, strerror(errno));
   lwip_close(s);
   return ret;
 }
+
+
+int vnet_tcp_connect_with_retry(uint16_t port) {
+  int max_retry = 10;
+  int retry = 0;
+  int ret = 0;
+  int base_sleep = 1000;
+  while (retry < max_retry) {
+    ret = vnet_tcp_connect(port);
+    if (ret > 0) {
+       break;
+    }
+    retry++;
+    usleep(base_sleep);
+    base_sleep *= 2;
+  }
+  return ret;
+}
+
 
 int vnet_send(int s, const void *data, size_t size) {
   return lwip_send(s, data, size, 0);
