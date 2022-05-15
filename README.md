@@ -28,6 +28,8 @@ In the termtunnel shell, you are allowed to download and upload files or create 
 
 **So how to use the console?**  *See [Use case](#use-case) please.*
 
+**And, If you want to speed up the process, you can use [ONESHOT mode](#oneshot-mode) to started immediately without entering a session.**
+
 ```bash
 sh-3.2$ >> termtunnel ssh root@19.95.02.23
 root@host:~# /tmp/termsocks -a
@@ -59,7 +61,7 @@ termtunnel>> help
 
 ####  Share local internet with remote
 > type `remote_listen 127.0.0.1 8000 127.0.0.1 0` and enter
- 
+
 > now, the port 8000 is a socks5/http mixed proxy server. well, open new a window to use it.
  
 > eg. You can use it by curl: `curl --socks5 127.0.0.1:8000 https://google.com`
@@ -72,7 +74,9 @@ termtunnel>> help
 > now, the port 3333 on your local compute is 10.11.123.123's VNC port.
 
 > use a local GUI VNC client to connect it!
-
+#### ONESHOT mode
+> you can directly run `termtunnel local_listen 127.0.0.1 80 127.0.0.1 0`, `termtunnel -- rz` or `termtunnel -- sz path\to\file`. in terminal, the corresponding action will be started immediately without entering a session.
+ 
 
 
 
