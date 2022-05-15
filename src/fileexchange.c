@@ -128,6 +128,7 @@ static int file_send_request(path_exchange_t *pe) {
   if (fd < 0) {
     log_error("open_error");
     vnet_close(nfd);
+    set_running_task_changed(-1);
     return -1;
   }
   char buf[READ_CHUNK_SIZE];
@@ -152,7 +153,7 @@ static int file_send_request(path_exchange_t *pe) {
 }
 
 int file_send_start(char *src_path, char *dst_path) {
-
+  log_info("file_send_start1");
   path_exchange_t *pe = (path_exchange_t *)malloc(sizeof(path_exchange_t));
   strcpy(pe->src_path, src_path);
   strcpy(pe->dst_path, dst_path);
@@ -170,13 +171,14 @@ int file_send_start(char *src_path, char *dst_path) {
     // pe->exchange_notify->data=(void*)-1;
     // uv_async_send(pe->exchange_notify);
   }
+  log_info("file_send_start2");
   sys_thread_new("file_send", file_send_request, (void *)pe,
                  DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
   return 0;
 }
 
 static int file_recv_request(path_exchange_t *pe) {
-  set_running_task_changed(1);
+  set_running_task_changed(1);  // TODO 计数机制问题
   int nfd = vnet_tcp_connect(sender_service_port);
   vnet_send(nfd, pe->src_path, strlen(pe->src_path) + 1);  // with_zero_as_split
   log_info("open %s for write to recv", pe->dst_path);
@@ -185,6 +187,7 @@ static int file_recv_request(path_exchange_t *pe) {
   if (fd < 0) {
     vnet_close(nfd);
     log_error("open error");
+    set_running_task_changed(-1);
     return 0;
   }
   char buf[READ_CHUNK_SIZE];

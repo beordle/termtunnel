@@ -75,27 +75,6 @@ int readn(int fd, void *buf, int n) {
   return n;
 }
 
-
-static int lwip_writen(int fd, void *buf, int n) {
-  int nwrite, left = n;
-  while (left > 0) {
-    if ((nwrite = lwip_write(fd, buf, left)) == -1) {
-      if (errno == EINTR || errno == EAGAIN) {
-        continue;
-      }
-    } else {
-      if (nwrite == n) {
-        return n;
-      } else {
-        left -= nwrite;
-        buf += nwrite;
-      }
-    }
-  }
-  return n;
-}
-
-
 int readtocharR(int fd, char *buf, int bufsize) {
   int readbytes = 0;
   char* last;

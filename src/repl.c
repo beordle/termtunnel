@@ -19,15 +19,19 @@
 #include <string.h>
 #include <unistd.h>
 #include <uv.h>
-
+#include <sys/ioctl.h>
 #include "intent.h"
 #include "log.h"
 #include "repl.h"
 #include "state.h"
 #include "thirdparty/tinyfiledialogs/tinyfiledialogs.h"
 #include "utils.h"
+#include "config.h"
+#include "agentcall.h"
 static int in;
 static int out;
+bool g_oneshot_mode = false;
+
 int print_command_usage(char *command_name);
 bool keyboard_break = false;
 int64_t ping_count = 0;
@@ -73,7 +77,7 @@ ssize_t expect_read(int fd, char *buf, size_t expect_size) {
       return rb;
     }
     if (rb == 0) {
-      CHECK(readbytes == expect_size, "EOF");
+      CHECK(readbytes == expect_size, "EOF");  // TODO(jdz) BIG
     }
     readbytes += rb;
   }
@@ -93,7 +97,6 @@ void recv_data(int fd, int *type, char **retbuf, int64_t *sz) {
   CHECK(a == sizeof(int64_t), "a: %d", a);
   int64_t msg_size = *((int64_t *)buf);
   // printf("recv %d",*(int64_t*)buf);
-
   a = expect_read(fd, buf, sizeof(int64_t));
   if (a == 0) {
     free(buf);
@@ -342,6 +345,9 @@ int download_func(int argc, char **argv) {
 }
 
 int exit_func(int argc, char **argv) {
+  if (argc == 2 && strcmp(argv[1], "-f") == 0) {
+    return -2;
+  }
   return -1; 
 }
 
@@ -422,8 +428,9 @@ void repl_run(int _in, int _out) {
   char *line;
   in = _in;
   out = _out;
+  int ret = 0;
   repl:
-  while ((line = linenoise("termtunnel> ")) != NULL) {
+  while ((line = linenoise(REPL_PROMPT)) != NULL) {
     /* Do something with the string. */
     // printf("line[%s] %p\n",line,line);
     linenoiseHistoryAdd(line); /* Add to the history. */
@@ -431,34 +438,115 @@ void repl_run(int _in, int _out) {
     int argc;
     char *argv[20];
     argc = split(line, argv, 20);  // NOTICE  这个函数会修改原来的string
-    int ret = repl_execve(argc, argv);
+    ret = repl_execve(argc, argv);
     if (ret < 0) {
       free(line);
       break;
     }
     free(line);
   }
-  send_binary(out, COMMAND_GET_RUNNING_TASK_COUNT, NULL, 0);
-  int type;
-  char *buf;
-  int64_t size;
-  recv_data(in, &type, &buf, &size);
-  int count = *(int*)buf;
-  if (count != 0) {
-    printf("number of running task: %d\n", count);
+  if (ret == -1) {
+    send_binary(out, COMMAND_GET_RUNNING_TASK_COUNT, NULL, 0);
+    int type;
+    char *buf;
+    int64_t size;
+    recv_data(in, &type, &buf, &size);
+    CHECK(type == COMMAND_RETURN, "type != COMMAND_RETURN");
+    int count = *(int*)buf;
+    if (count != 0) {
+      printf("number of running task: %d, use exit -f instead.\n", count);
+      free(buf);
+      goto repl;
+    }
     free(buf);
-    goto repl;
   }
-  if (type == COMMAND_RETURN) {
-  }
-  free(buf);
-
 
   // TODO 支持环境变量设置只读，不保存history
   linenoiseHistorySave(command_history_file);
 
   send_binary(out, COMMAND_EXIT_REPL, NULL, 0);
 }
+
+int update_processbar(float percent, char string[])
+{
+    struct winsize window;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &window);
+    int bar_length = window.ws_col - 12;
+    /*========================*/
+    printf("\033[2K\r");
+    printf("%s\n", string);
+    printf("|");
+    for (int i = 0; i < bar_length; i++)
+    {
+        if (i < percent / 100 * bar_length)
+        {
+            printf("█");
+        }
+        else
+        {
+            printf(" ");
+        }
+    }
+    printf("| [%.1f%%]", percent);
+    if (percent < 100)
+    {
+        printf("\033[1A");
+    }
+    fflush(stdout);
+    return 0;
+}
+
+int get_server_running_task(){
+  send_binary(out, COMMAND_GET_RUNNING_TASK_COUNT, NULL, 0);
+  int type;
+  char *buf;
+  int64_t size;
+  recv_data(in, &type, &buf, &size);
+  CHECK(type == COMMAND_RETURN, "type != COMMAND_RETURN");
+  int count = *(int*)buf;
+  free(buf);
+  return count;
+}
+
+void oneshot_run(int _in, int _out) {
+  in = _in;
+  out = _out;
+  restore_stdin();
+  signal(SIGINT, handler);
+  //
+  /*for (int i=0; i<=100; i++){
+    usleep(10000);
+    update_processbar(i, "11");
+    fflush(stdout);
+  }*/
+  send_binary(out, COMMAND_GET_ARGS, NULL, 0);
+  char *buf = NULL;
+  int64_t size;
+  int64_t type = 0;
+  recv_data(_in, &type, &buf, &size);
+  // COMMAND_GET_ARGS_REPLY
+  int32_t argc = *(int32_t*)buf;
+  char* ptr = buf+  sizeof(int32_t);
+  char** argv = malloc(sizeof(char*) * argc);
+  for (int i=0; i < argc; i++) {
+    argv[i] = ptr;
+    ptr += strlen(ptr)+ 1;
+  }
+  repl_execve(argc, argv);
+  // spinlock wait
+  while (true) {
+    usleep(500000); // TODO 仍有可能极小概率任务还没有开始就开始判定，未来可增加健壮性。
+    if (get_server_running_task() == 0) {
+      free(buf);
+      free(argv);
+      send_binary(out, COMMAND_EXIT_REPL, NULL, 0);
+      return;
+    }
+  }
+  free(argv);
+  free(buf);
+}
+
 
 void interact_run(int _in, int _out) {
   set_stdin_raw();
@@ -488,7 +576,6 @@ void interact_run(int _in, int _out) {
       char *buf = NULL;
       int64_t size;
       int64_t type = 0;
-
       recv_data(_in, &type, &buf, &size);
       switch (type) {
         case COMMAND_TTY_PLAIN_DATA:  // output pty data
@@ -503,8 +590,13 @@ void interact_run(int _in, int _out) {
           exit(*(int *)buf);
           break;
         }
-        case COMMAND_ENTER_REPL:  // output pty data
+        case COMMAND_ENTER_REPL:
         {
+          if (sizeof(int64_t) == size) { // TODO(jdz)
+            g_oneshot_mode = true;
+          } else {
+            g_oneshot_mode = false;
+          }
           if (buf) {
             free(buf);
           }

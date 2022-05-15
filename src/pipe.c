@@ -448,7 +448,7 @@ void send_exit_message(uv_async_t *handle) {
   int exitcode = (int)handle->data;
   comm_write_static_packet_to_cli(COMMAND_CMD_EXIT, &exitcode, sizeof(int));
   exiting = true;
-  free(handle);
+  //free(handle); // TODO
 }
 
 void pty_process_on_exit(int exitcode) {
@@ -506,6 +506,37 @@ void send_base64binary_to_agent(const char *buf, size_t size) {
   free(ebuf);
 }
 
+int termtunnel_notify(void* s) {
+  uv_async_send(s);
+}
+
+void get_args_done_callback(uv_async_t *a){
+  char* buf = malloc(READ_CHUNK_SIZE);
+  memcpy(buf, &g_oneshot_argc, sizeof(int32_t));
+  char* wptr = buf + sizeof(int32_t)/sizeof(char);
+  for (int i = 0; i < g_oneshot_argc; i++) {
+    memcpy(wptr, g_oneshot_argv[i], strlen(g_oneshot_argv[i])+1);
+    wptr += strlen(g_oneshot_argv[i]) + 1;
+    free(g_oneshot_argv[i]);
+  }
+  free(g_oneshot_argv);
+  g_oneshot_argv = NULL;
+  g_oneshot_argc = 0;
+  comm_write_packet_to_cli(COMMAND_GET_ARGS_REPLY, buf, wptr - buf);
+  // free(a); //TODO!!!
+}
+
+
+int call_bootstrap_get_args(get_args_callback bootstrap_args_ready) {
+  // async
+  uv_async_t *s = malloc(sizeof(uv_async_t));
+  uv_async_init(uv_default_loop(), s, (uv_async_cb)bootstrap_args_ready);
+  pthread_t p;
+  pthread_create(&p, NULL, bootstrap_get_args, s);
+  pthread_detach(p);
+  return 0;
+}
+
 void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
   switch (type) {
     case COMMAND_TTY_PLAIN_DATA: {
@@ -521,6 +552,12 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
     case COMMAND_TTY_WIN_RESIZE: {
       struct winsize *ttysize = (struct winsize *)buf;  // The size of our tty
       resize_pty(ttysize);
+      break;
+    }
+    case COMMAND_GET_ARGS: {
+  
+      call_bootstrap_get_args(get_args_done_callback);
+      //comm_write_packet_to_cli(COMMAND_TTY_PLAIN_DATA, "11", 2);
       break;
     }
     case COMMAND_EXIT_REPL: {
@@ -594,17 +631,33 @@ void server_handle_green_packet(char *buf, int size) {
   // handshake()
   // MAGIC
   //log_debug("server handle agent data: %*s(%d)", size, buf, size);
-  int handshake_length = sizeof("MAGIC!") - 1;
-  if (size == handshake_length &&
-      memcmp("MAGIC!", buf, handshake_length) == 0) {
-    server_see_agent_is_repl = true;
-    comm_write_packet_to_cli(COMMAND_ENTER_REPL, NULL, 0);
-    // TODO!
-    libuv_add_vnet_notify();
-    vnet_init(vnet_notify_to_libuv);
-    return;
-  }
+  char *handshake_strs[] = {"ONESHOT!", "MAGIC!", NULL};
+  int handshake_lengths[] = {sizeof("ONESHOT!")-1, sizeof("MAGIC!")-1, 0};
+  char *handshake_str = NULL;
+  int i = 0;
+  do {
+    int handshake_length = handshake_lengths[i];
+    handshake_str = handshake_strs[i];
+    if (size == handshake_length &&
+        memcmp(handshake_str, buf, handshake_length) == 0) {
+      server_see_agent_is_repl = true;
+      int64_t flag;
+      switch (i) {
+        case 0:
+          flag = 1;
+          char* dup = memdup(&flag, sizeof(flag));
+          comm_write_packet_to_cli(COMMAND_ENTER_REPL, dup, sizeof(int64_t));
+          break;
+        case 1:
+          comm_write_packet_to_cli(COMMAND_ENTER_REPL, NULL, 0);
 
+      }
+      libuv_add_vnet_notify();
+      vnet_init(vnet_notify_to_libuv);
+      return;
+    }
+  } while (handshake_strs[++i] != NULL);
+  
   int ping_length = sizeof("PING!") - 1;
   if (size == ping_length && memcmp("PING!", buf, ping_length) == 0) {
     log_debug("server green ping!");

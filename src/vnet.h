@@ -18,6 +18,7 @@ int vnet_send(int s, const void *data, size_t size);
 int vnet_recv(int s, const void *data, size_t size);
 int vnet_listen_at(uint16_t port, void *cb,char* thread_desc);
 int vnet_close(int s);
+int lwip_writen(int fd, void *buf, int n);
 void vnet_setsocketdefaultopt(int nfd);
 int vnet_readn(int fd, void *buf, int n);
 int vnet_readstring(int fd, char *buf, int n);

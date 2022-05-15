@@ -22,7 +22,7 @@
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
-
+#include "repl.h"
 #include "agent.h"
 #include "config.h"
 #include "fileexchange.h"
@@ -59,11 +59,6 @@ void handler(int sig) {
 #endif
 
 static void on_resize(int signum) {
-  // if (first){
-  //     first=false;
-  //     return;
-  // }
-  // printf("%d\n",signum);
   struct winsize ttysize;  // The size of our tty
   int ttyfd = open("/dev/tty", O_RDONLY | O_NOCTTY);
   int r = ioctl(ttyfd, TIOCGWINSZ, &ttysize);
@@ -76,16 +71,15 @@ static void on_resize(int signum) {
               sizeof(struct winsize));
 }
 
+
 void cli_loop(int in, int out, int argc, const char *argv[]) {
   repl_init();
   while (true) {
     interact_run(in, out);
     kill(getpid(), SIGWINCH);
     // one shot 需要由 agent设定，然后传输给server，再控制到 client的行为。
-    bool one_shot_mode = false;
-    if (one_shot_mode) {
-      // one shot 仅由 cli 做出解释处理，不影响 server
-      // printf("oneshot!\n");
+    if (g_oneshot_mode) {
+      oneshot_run(in, out);
     } else {
       repl_run(in, out);
     }
@@ -139,7 +133,7 @@ int main(int argc, const char *argv[]) {
     }
   }
   termtunnel_state_init();
-
+  q = queue_create();
   // spt_init(argc, argv);
   // 其实这里仿照 lldb -- 去启动应用可能会更好？
   // if run as agent
@@ -150,7 +144,6 @@ int main(int argc, const char *argv[]) {
     return 0;
   }
 
-  q = queue_create();
   if (pipe(in_fd) == -1) {
     perror("Cannot create the pipe");
     exit(EXIT_FAILURE);
