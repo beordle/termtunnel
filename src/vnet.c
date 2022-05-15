@@ -130,17 +130,35 @@ int vnet_listen_at(uint16_t port, void *cb, char* thread_desc) {
 }
 
 
+int lwip_writen(int fd, void *buf, int n) {
+  int nwrite, left = n;
+  while (left > 0) {
+    if ((nwrite = lwip_write(fd, buf, left)) == -1) {
+      if (errno == EINTR || errno == EAGAIN) {
+        continue;
+      }
+    } else {
+      if (nwrite == n) {
+        return n;
+      } else {
+        left -= nwrite;
+        buf += nwrite;
+      }
+    }
+  }
+  return n;
+}
+
 int vnet_tcp_connect(uint16_t port) {
   int s = lwip_socket(AF_INET, SOCK_STREAM, 0);
   LWIP_ASSERT("s >= 0", s >= 0);
-  struct sockaddr_in addr;
+  struct lwip_sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
   addr.sin_len = sizeof(addr);
   addr.sin_family = AF_INET;
   addr.sin_port = lwip_htons(port);
   addr.sin_addr.s_addr = inet_addr(server_ip);
   vnet_setsocketdefaultopt(s);
-  /* connect */
   int ret = lwip_connect(s, (struct sockaddr *)&addr, sizeof(addr));
   if (ret == 0) {
     return s;

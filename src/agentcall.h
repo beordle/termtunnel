@@ -8,6 +8,10 @@
 #ifndef TERMTUNNEL_AGENTCALL_H
 #define TERMTUNNEL_AGENTCALL_H
 #define METHOD_CALL_FORWARD_STATIC 1
+#define METHOD_GET_ARGS 2
 int agentcall_server_start();
 int server_call_agent(int32_t method, char *strbuf);
+typedef void (*get_args_callback)(void *handle);
+
+int bootstrap_get_args(void*);
 #endif

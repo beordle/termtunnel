@@ -19,6 +19,7 @@
 #include "pipe.h"
 #include "state.h"
 #include "thirdparty/base64.h"
+#include "thirdparty/ya_getopt/ya_getopt.h"
 #include "utils.h"
 #include "uv.h"
 #include "vnet.h"
@@ -28,6 +29,11 @@ uv_tty_t agent_stdout_tty;
 uv_tty_t agent_stdin_tty;
 static int64_t pending_send = 0;  //记录待转发的字节，用于tty 流控
 int max_suggested_size = 10240;
+
+int32_t g_oneshot_argc;
+char** g_oneshot_argv;
+
+
 void agent_read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
 
 static void alloc_buffer(uv_handle_t *handle, size_t suggested_size,
@@ -225,12 +231,10 @@ int agent_process_frame(char *str_data, int data_size) {
 }
 
 int agent_handle_binary(char *buf, int size) {
-  log_info("agent_handle_binary data (%d)\n", size);
   // simple echo
   // block_write_binary_to_server(buf, size);
   vnet_data_income(buf, size);
   // block_write_binary_to_server(buf, size);
-
   return 0;
 }
 
@@ -252,14 +256,37 @@ void agent_write_data_to_server(char *buf, size_t s, bool autofree) {
   }
 }
 
-void agent() {
+static void sigint_handler(int sig) {
+  exit(0);
+  return;
+}
+
+void agent(int argc, char** argv) {
+  bool opt_is_repl = false;
+  if (argc != 0) {
+    // printf("argv %s\n", argv[0]);
+    g_oneshot_argc = argc;
+    g_oneshot_argv = argv;
+  } else {
+    opt_is_repl = true;
+  }
+
   set_agent_process();
   setvbuf(stdin, NULL, _IONBF, 0);
   agent_set_stdin_noecho();
   atexit(agent_restore_stdin);
+  signal(SIGINT, sigint_handler);
   int len_result;
-  char *result = green_encode("MAGIC!", strlen("MAGIC!"), &len_result);
-  printf("%s\r\n", result);
+  char *str_trigger;
+  // 判断是否使用 oneshot 模式
+  if (opt_is_repl) {
+    str_trigger = "MAGIC!";
+  } else {
+    str_trigger = "ONESHOT!";
+  }
+  char *result = green_encode(str_trigger, strlen(str_trigger), &len_result);
+  usleep(2000);  // 防止粘连，优化显示的目的。 
+  writen(STDOUT_FILENO, result, len_result);
   free(result);
 
   static uv_timer_t timer_watcher;
