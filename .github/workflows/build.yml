@@ -101,10 +101,6 @@ jobs:
         sudo apt install -y gcc-multilib
         cmake .
         make CFLAGS="-m32"
-    - name: Compress
-      uses: svenstaro/upx-action@v2
-      with:
-        file: termtunnel
     - name: Packing
       run: |
         mv termtunnel termtunnel-linux-i686
@@ -178,10 +174,6 @@ jobs:
       run: |
         cmake .
         make
-    - name: Compress
-      uses: svenstaro/upx-action@v2
-      with:
-        file: termtunnel
     - name: Packing
       run: |
         mv termtunnel termtunnel-linux-aarch64
@@ -220,10 +212,6 @@ jobs:
       run: |
         cmake .
         make
-    - name: Compress
-      uses: svenstaro/upx-action@v2
-      with:
-        file: termtunnel
     - name: Packing
       run: |
         mv termtunnel termtunnel-linux-armeabi
@@ -263,10 +251,6 @@ jobs:
       run: |
         cmake .
         make
-    - name: Compress
-      uses: svenstaro/upx-action@v2
-      with:
-        file: termtunnel
     - name: Packing
       run: |
         mv termtunnel termtunnel-linux-mips64el
