@@ -104,8 +104,7 @@ jobs:
     - name: Packing
       run: |
         mv termtunnel termtunnel-linux-i686
-        tar -czf termtunnel-linux-amd64.tar.gz termtunnel-linux-i686
-        
+        tar -czf termtunnel-linux-i686.tar.gz termtunnel-linux-i686
         
     - name: Upload Artifact
       uses: actions/upload-artifact@v2
