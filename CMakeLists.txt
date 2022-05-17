@@ -14,7 +14,7 @@ add_subdirectory(thirdparty/libuv)
 include_directories(thirdparty/libuv/include) 
 endif()
 
-add_compile_options(-g)
+add_compile_options(-Os)
 
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lwip/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/port/include)
