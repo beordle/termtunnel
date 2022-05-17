@@ -43,7 +43,7 @@ jobs:
           #prerelease: true
       - id: step_upload_url
         run: echo "::set-output name=upload_url::${{ steps.create_release.outputs.upload_url }}"
-
+        
   create_linux_amd64_static_release:
     needs: create_release
     name: Create static linux amd64 release
@@ -60,9 +60,15 @@ jobs:
         tar xzf x86_64-linux-musl-native.tgz -C /opt
         cmake .
         make
+    - name: Compress
+      uses: svenstaro/upx-action@v2
+      with:
+        file: termtunnel
+    - name: Packing
+      run: |
         mv termtunnel termtunnel-linux-amd64
         tar -czf termtunnel-linux-amd64.tar.gz termtunnel-linux-amd64
-        
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v2
       with: 
@@ -95,9 +101,16 @@ jobs:
         sudo apt install -y gcc-multilib
         cmake .
         make CFLAGS="-m32"
+    - name: Compress
+      uses: svenstaro/upx-action@v2
+      with:
+        file: termtunnel
+    - name: Packing
+      run: |
         mv termtunnel termtunnel-linux-i686
-        tar -czf termtunnel-linux-i686.tar.gz termtunnel-linux-i686
-
+        tar -czf termtunnel-linux-amd64.tar.gz termtunnel-linux-i686
+        
+        
     - name: Upload Artifact
       uses: actions/upload-artifact@v2
       with: 
@@ -165,6 +178,12 @@ jobs:
       run: |
         cmake .
         make
+    - name: Compress
+      uses: svenstaro/upx-action@v2
+      with:
+        file: termtunnel
+    - name: Packing
+      run: |
         mv termtunnel termtunnel-linux-aarch64
         tar -czf termtunnel-linux-aarch64.tar.gz termtunnel-linux-aarch64
     - name: Upload Artifact
@@ -201,6 +220,12 @@ jobs:
       run: |
         cmake .
         make
+    - name: Compress
+      uses: svenstaro/upx-action@v2
+      with:
+        file: termtunnel
+    - name: Packing
+      run: |
         mv termtunnel termtunnel-linux-armeabi
         tar -czf termtunnel-linux-armeabi.tar.gz termtunnel-linux-armeabi
     - name: Upload Artifact
@@ -238,6 +263,12 @@ jobs:
       run: |
         cmake .
         make
+    - name: Compress
+      uses: svenstaro/upx-action@v2
+      with:
+        file: termtunnel
+    - name: Packing
+      run: |
         mv termtunnel termtunnel-linux-mips64el
         tar -czf termtunnel-linux-mips64el.tar.gz termtunnel-linux-mips64el
     - name: Upload Artifact
