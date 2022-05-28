@@ -313,7 +313,7 @@ jobs:
           cp /usr/bin/ssh.exe .
       - name: Zip
         run: |
-          zip -r package.zip *.dll termtunnel.exe
+          zip -r package.zip *.dll termtunnel.exe ssh.exe
       - name: Upload Artifact
         uses: actions/upload-artifact@v2
         with: 
