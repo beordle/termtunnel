@@ -290,13 +290,16 @@ jobs:
           cmake -version
           cmake .
           make
-          ls
-          ls /c/windows/System32
-          ls /usr/lib/
-          ls /lib
       - name: Upload Artifact
         uses: actions/upload-artifact@v2
         with: 
           name: termtunnel.exe
+      - name: Build
+        run: |
+          echo 'Running in MSYS2!'
+          cmake -version
+          cmake .
+          make
+          find / -name msys-uv-1.dll
           
 
