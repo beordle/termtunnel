@@ -283,20 +283,39 @@ jobs:
         with:
           msystem: MSYS
           update: true
-          install: git libuv gcc libuv-devel cmake make
+          install: git libuv gcc libuv-devel cmake make zip
       - name: Build
         run: |
           echo 'Running in MSYS2!'
           cmake -version
           cmake .
           make
+
+      - name: Find
+        run: |
+          cp /usr/bin/msys-2.0.dll .
+          cp /usr/bin/msys-asn1-8.dll .
+          cp /usr/bin/msys-com_err-1.dll .
+          cp /usr/bin/msys-crypt-0.dll .
+          cp /usr/bin/msys-crypto-1.1.dll .
+          cp /usr/bin/msys-gcc_s-seh-1.dll .
+          cp /usr/bin/msys-gssapi-3.dll .
+          cp /usr/bin/msys-hcrypto-4.dll .
+          cp /usr/bin/msys-heimbase-1.dll .
+          cp /usr/bin/msys-heimntlm-0.dll .
+          cp /usr/bin/msys-hx509-5.dll .
+          cp /usr/bin/msys-krb5-26.dll .
+          cp /usr/bin/msys-roken-18.dll .
+          cp /usr/bin/msys-sqlite3-0.dll .
+          cp /usr/bin/msys-uv-1.dll .
+          cp /usr/bin/msys-wind-0.dll .
+          cp /usr/bin/msys-z.dll .
+      - name: Zip
+        run: |
+          zip -r package.zip *.dll termtunnel.exe
       - name: Upload Artifact
         uses: actions/upload-artifact@v2
         with: 
-          name: termtunnel.exe
-          path: termtunnel.exe
-      - name: Find
-        run: |
-          find / -name msys-uv-1.dll
-          
+          name: package.zip
+          path: package.zip
 
