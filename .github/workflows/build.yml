@@ -283,7 +283,7 @@ jobs:
         with:
           msystem: MSYS
           update: true
-          install: git libuv gcc libuv-devel cmake make zip
+          install: git libuv gcc libuv-devel cmake make zip openssh
       - name: Build
         run: |
           echo 'Running in MSYS2!'
@@ -310,6 +310,7 @@ jobs:
           cp /usr/bin/msys-uv-1.dll .
           cp /usr/bin/msys-wind-0.dll .
           cp /usr/bin/msys-z.dll .
+          cp /usr/bin/ssh.exe .
       - name: Zip
         run: |
           zip -r package.zip *.dll termtunnel.exe
