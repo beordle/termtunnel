@@ -283,7 +283,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: git mingw-w64-x86_64-cc libuv libuv-devel cmake make
+          install: git gcc libuv libuv-devel cmake make
       - name: CI-Build
         run: |
           echo 'Running in MSYS2!'
