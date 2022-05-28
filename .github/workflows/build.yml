@@ -294,5 +294,9 @@ jobs:
           ls /c/windows/System32
           ls /usr/lib/
           ls /lib
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with: 
+          name: termtunnel.exe
           
 
