@@ -291,4 +291,8 @@ jobs:
           cmake .
           make
           ls
+          ls /c/windows/System32
+          ls /usr/lib/
+          ls /lib
+          
 
