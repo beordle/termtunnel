@@ -268,4 +268,24 @@ jobs:
         asset_path: termtunnel-linux-mips64el.tar.gz
         asset_name: termtunnel-${{ github.event.inputs.version }}-linux-mips64el.tar.gz
         asset_content_type: application/octet-stream
+        
+
+  create_windows_x86_64_release:
+    needs: create_release
+    name: Create windows x86_64 release
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: git mingw-w64-x86_64-cc libuv libuv-devel cmake make
+      - name: CI-Build
+        run: |
+          echo 'Running in MSYS2!'
+          cmake -version
 
