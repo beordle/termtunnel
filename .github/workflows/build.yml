@@ -288,4 +288,7 @@ jobs:
         run: |
           echo 'Running in MSYS2!'
           cmake -version
+          cmake .
+          make
+          ls
 
