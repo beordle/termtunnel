@@ -280,7 +280,7 @@ void portforward_transparent_server_pipe(port_listen_t *pe) {
 static void portforward_service_handler(port_listen_t *pe) {
   int new_sd;
   int listen_fd = pe->local_fd;
-  // set_running_task_changed(1);
+  set_running_task_changed(1);
   while (true) {
     if ((new_sd = accept(listen_fd, NULL, NULL)) >= 0) {
       pthread_t *worker = (pthread_t *)malloc(sizeof(pthread_t));  // TODO(jdz)  free
@@ -298,7 +298,7 @@ static void portforward_service_handler(port_listen_t *pe) {
       log_info("abort the accept");
     }
   }
-  // set_running_task_changed(-1);
+  set_running_task_changed(-1);
   return;
 }
 
