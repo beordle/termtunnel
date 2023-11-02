@@ -360,7 +360,7 @@ actionfinder_t action_table[] = {
     {"local_listen", portforward_func, "port forward bind on local host",
      "local_listen [local_host] [local_port] [remote_host] [remote_port]\n"
      "when remote_port==0, the service listen on remote_port will be a "
-     "socks5+http proxy server.", NULL},
+     "socks5+http proxy server.", FLAG_ONESHOT},
     {"remote_listen", portforward_func, "port forward bind on remote host",
      "remote_listen [remote_host] [remote_port] [local_host] [local_port]\n"
      "when local_port==0, the service listen on remote_port  will be a "
