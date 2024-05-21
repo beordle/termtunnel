@@ -99,7 +99,7 @@ int do_waitpid(pid_t childpid) {
   pid_t wait_id = 0;
   do {
     errno = 0;
-    wait_id = waitpid(childpid, &status, NULL);
+    wait_id = waitpid(childpid, &status, 0);
 
     if (wait_id < 0 && errno == EINTR) {
       wait_id = 0;
@@ -179,7 +179,7 @@ int pty_run(int argc, char *argv[], tell_exitcode_callback *cb) {
         (thread_pass_arg_t *)malloc(sizeof(thread_pass_arg_t));
     temp->cb_func = cb;
     temp->process_pid = pid;
-    pthread_create(&thr, NULL, do_waitpid_wrap, temp);
+    pthread_create(&thr, NULL, (void*)do_waitpid_wrap, temp);
     pthread_detach(thr);
   }
   free(name);

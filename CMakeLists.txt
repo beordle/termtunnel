@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 project(termtunnel C)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 if (CMAKE_HOST_WIN32)
     set(WINDOWS 1)

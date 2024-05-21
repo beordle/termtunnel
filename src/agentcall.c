@@ -131,7 +131,7 @@ int server_call_agent(int32_t method, char *strbuf) {
   thread_arg_pass_t *tmp = malloc(sizeof(thread_arg_pass_t));
   tmp->method = method;
   tmp->strbuf = strdup(strbuf);
-  sys_thread_new("call_send", call_send_request, tmp, DEFAULT_THREAD_STACKSIZE,
+  sys_thread_new("call_send", (lwip_thread_fn)call_send_request, tmp, DEFAULT_THREAD_STACKSIZE,
                  DEFAULT_THREAD_PRIO);
   return 0;
 }

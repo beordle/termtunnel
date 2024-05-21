@@ -244,7 +244,7 @@ int pipe_lwip_socket_and_socket_pair(int lwip_fd, int fd) {
   *(array) = lwip_fd;
   *(array + 1) = fd;
   pthread_t worker2;
-  pthread_create(&worker2, NULL, &loop_socket_to_lwipsocket, (void *)array);
+  pthread_create(&worker2, NULL, (void*)&loop_socket_to_lwipsocket, (void *)array);
   loop_lwipsocket_to_socket((void *)array);
   pthread_join(worker2, NULL);
   log_info("lwip ip pair %d %d", lwip_fd, fd);
@@ -289,9 +289,9 @@ static void portforward_service_handler(port_listen_t *pe) {
       child_pe->port = pe->port;
       child_pe->local_fd = new_sd;
       if (pe->port == 0) {  // socks/http proxy
-        pthread_create(worker, NULL, &portforward_transparent_server_pipe, (void *)child_pe);
+        pthread_create(worker, NULL, (void*)&portforward_transparent_server_pipe, (void *)child_pe);
       } else {
-        pthread_create(worker, NULL, &portforward_static_server_pipe, (void *)child_pe);
+        pthread_create(worker, NULL, (void*)&portforward_static_server_pipe, (void *)child_pe);
       } 
 
     } else {
@@ -354,7 +354,7 @@ int portforward_static_start(char *src_host, uint16_t src_port, char *dst_host,
                            // TODO(jdz) agent监听模式，cli暂时无法获取结果
   }
 
-  sys_thread_new("portforward_static", portforward_service_handler, (void *)pe,
+  sys_thread_new("portforward_static", (lwip_thread_fn)portforward_service_handler, (void *)pe,
                  DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
   return 0;
 
