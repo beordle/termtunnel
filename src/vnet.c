@@ -326,17 +326,17 @@ void *vnet_init(callback_t cb) {
 
   if (get_state_mode() == MODE_AGENT_PROCESS) {
     // pass
-      sys_thread_new("file_receiver", file_receiver_start, NULL,
+      sys_thread_new("file_receiver", (lwip_thread_fn)file_receiver_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
-      sys_thread_new("file_sender", file_sender_start, NULL,
+      sys_thread_new("file_sender", (lwip_thread_fn)file_sender_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
-      sys_thread_new("agentcall_server", agentcall_server_start, NULL,
+      sys_thread_new("agentcall_server", (lwip_thread_fn)agentcall_server_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
   }
   sys_thread_new("portforward_static_server",
-                   portforward_static_remote_server_start, NULL,
+                   (lwip_thread_fn)portforward_static_remote_server_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
-  sys_thread_new("socksproxy_server", socksproxy_remote_start, NULL,
+  sys_thread_new("socksproxy_server", (lwip_thread_fn)socksproxy_remote_start, NULL,
                    DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
 
   return &g_netif;

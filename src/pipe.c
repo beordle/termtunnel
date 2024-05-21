@@ -103,7 +103,7 @@ queue_t *q;
 void uvloop_process_income(uv_async_t *handle) {
   // log_info("process income queue\n");
   frame_data *f;
-  int dry = handle->data;
+  size_t dry = (size_t)handle->data;
   if (!dry) {
     return;
   }
@@ -139,7 +139,7 @@ int vnet_notify_to_libuv(char *buf, size_t size) {
   f->len = size;
   queue_put(q, f);
   // log_info("add queue");
-  data_income_notify.data = 1;  // set dry
+  data_income_notify.data = (void*)1;  // set dry
   int r = uv_async_send(&data_income_notify);
   return 0;
 }
@@ -151,7 +151,7 @@ int libuv_add_vnet_notify() {
     return 0;
   }
   added = true;
-  data_income_notify.data = 1;
+  data_income_notify.data = (void*)1;
   int r = uv_async_init(uv_default_loop(), &data_income_notify,
                         uvloop_process_income);
   log_info("libuv_add_vnet_notify %d", r);
@@ -377,7 +377,7 @@ void find_a_packet(char *buf, ssize_t len) {
 }
 
 int push_data() {
-  data_income_notify.data = 1;
+  data_income_notify.data = (void*)1;
   return  uv_async_send(&data_income_notify);
 }
 
@@ -451,11 +451,12 @@ void send_exit_message(uv_async_t *handle) {
   //free(handle); // TODO
 }
 
-void pty_process_on_exit(int exitcode) {
+int pty_process_on_exit(int exitcode) {
   // TODO 模拟信号错误
   // tell client our exitcode.
-  async_process_exit->data = (int)exitcode;
+  async_process_exit->data = (void*)exitcode;
   uv_async_send(async_process_exit);
+  return 0;
 }
 
 void server(int argc, const char *argv[]) {
@@ -532,7 +533,7 @@ int call_bootstrap_get_args(get_args_callback bootstrap_args_ready) {
   uv_async_t *s = malloc(sizeof(uv_async_t));
   uv_async_init(uv_default_loop(), s, (uv_async_cb)bootstrap_args_ready);
   pthread_t p;
-  pthread_create(&p, NULL, bootstrap_get_args, s);
+  pthread_create(&p, NULL, (void*)bootstrap_get_args, s);
   pthread_detach(p);
   return 0;
 }
@@ -556,7 +557,7 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
     }
     case COMMAND_GET_ARGS: {
   
-      call_bootstrap_get_args(get_args_done_callback);
+      call_bootstrap_get_args((void*)get_args_done_callback);
       //comm_write_packet_to_cli(COMMAND_TTY_PLAIN_DATA, "11", 2);
       break;
     }

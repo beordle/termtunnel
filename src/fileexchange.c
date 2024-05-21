@@ -172,7 +172,7 @@ int file_send_start(char *src_path, char *dst_path) {
     // uv_async_send(pe->exchange_notify);
   }
   log_info("file_send_start2");
-  sys_thread_new("file_send", file_send_request, (void *)pe,
+  sys_thread_new("file_send", (lwip_thread_fn)file_send_request, (void *)pe,
                  DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
   return 0;
 }
@@ -217,7 +217,7 @@ int file_recv_start(char *src_path, char *dst_path) {
   strcpy(pe->src_path, src_path);
   strcpy(pe->dst_path, dst_path);
   log_debug("file_recv_start");
-  sys_thread_new("file_recv", file_recv_request, (void *)pe,
+  sys_thread_new("file_recv", (lwip_thread_fn)file_recv_request, (void *)pe,
                  DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
   return 0;
 }

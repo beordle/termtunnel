@@ -364,13 +364,13 @@ actionfinder_t action_table[] = {
     {"remote_listen", portforward_func, "port forward bind on remote host",
      "remote_listen [remote_host] [remote_port] [local_host] [local_port]\n"
      "when local_port==0, the service listen on remote_port  will be a "
-     "socks5+http proxy server.", NULL},
+     "socks5+http proxy server.", 0},
     {"upload", upload_func, "upload a file", "usage", FLAG_ONESHOT},
     {"rz", upload_func, "alias upload", "usage", FLAG_ONESHOT},
     {"download", download_func, "download a file", "usage", FLAG_ONESHOT},
     {"sz", download_func, "alias download", "usage", FLAG_ONESHOT},
     {"help", help_func, "view help manpage", "usage", FLAG_ONESHOT},
-    {"exit", exit_func, "exit application", "usage", NULL},
+    {"exit", exit_func, "exit application", "usage", 0},
 };
 
 int help_func(int argc, char **argv) {
@@ -596,7 +596,7 @@ void interact_run(int _in, int _out) {
       int cc = read(STDIN_FILENO, ibuf, BUFSIZ);
       CHECK(cc > 0, "cc>0");
       if (cc < 0) {
-        log_trace("error %s", strerror("read"));
+        log_trace("read error %s", strerror(errno));
         exit(EXIT_FAILURE);
       }
       send_binary(_out, COMMAND_TTY_PLAIN_DATA, ibuf, cc);
