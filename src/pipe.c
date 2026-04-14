@@ -135,7 +135,16 @@ void uvloop_process_income(uv_async_t *handle) {
 
 int vnet_notify_to_libuv(char *buf, size_t size) {
   frame_data *f = (frame_data *)malloc(sizeof(frame_data));
+  if (f == NULL) {
+    log_error("malloc frame_data failed");
+    return -1;
+  }
   f->buf = memdup(buf, size);
+  if (f->buf == NULL) {
+    free(f);
+    log_error("memdup frame_data failed");
+    return -1;
+  }
   f->len = size;
   queue_put(q, f);
   // log_info("add queue");
@@ -154,6 +163,11 @@ int libuv_add_vnet_notify() {
   data_income_notify.data = (void*)1;
   int r = uv_async_init(uv_default_loop(), &data_income_notify,
                         uvloop_process_income);
+  if (r != 0) {
+    added = false;
+    log_error("uv_async_init data_income_notify failed: %d", r);
+    return -1;
+  }
   log_info("libuv_add_vnet_notify %d", r);
 
   return 0;
@@ -195,14 +209,24 @@ static void write_cb_without_free(uv_write_t *req, int status) {
   free(req);
 }
 
-static void comm_write_data_to_cli(char *buf, size_t s, bool autofree) {
+static void comm_write_data_to_cli(void *buf, size_t s, bool autofree) {
   pending_send++;
   if (pending_send > TTY_WATERMARK) {
-    uv_read_stop(&tty);
+    uv_read_stop((uv_stream_t *)&tty);
   }
   uv_write_t *req1 = malloc(sizeof(uv_write_t));
   uv_buf_t *b = malloc(sizeof(uv_buf_t));
-  b->base = buf;
+  if (req1 == NULL || b == NULL) {
+    free(req1);
+    free(b);
+    if (autofree) {
+      free(buf);
+    }
+    pending_send--;
+    log_error("malloc uv write buffer failed");
+    return;
+  }
+  b->base = (char *)buf;
   b->len = s;
   req1->data = b;
   if (autofree) {
@@ -216,7 +240,7 @@ static void comm_write_data_to_cli(char *buf, size_t s, bool autofree) {
   }
 }
 
-void comm_write_static_packet_to_cli(int64_t type, char *buf, size_t s) {
+void comm_write_static_packet_to_cli(int64_t type, void *buf, size_t s) {
   int64_t *size = (int64_t *)malloc(sizeof(int64_t));  //可能不行
   *size = s;
   comm_write_data_to_cli(size, sizeof(int64_t), true);
@@ -226,7 +250,7 @@ void comm_write_static_packet_to_cli(int64_t type, char *buf, size_t s) {
   comm_write_data_to_cli(buf, s, false);
 }
 
-void comm_write_packet_to_cli(int64_t type, char *buf, size_t s) {
+void comm_write_packet_to_cli(int64_t type, void *buf, size_t s) {
   int64_t *size = (int64_t *)malloc(sizeof(int64_t));  //可能不行
   *size = s;
   comm_write_data_to_cli(size, sizeof(int64_t), true);
@@ -238,6 +262,7 @@ void comm_write_packet_to_cli(int64_t type, char *buf, size_t s) {
 
 ssize_t parser(char *buf, ssize_t nread) {
   CHECK(nread > 0, "nread > 0");
+  const int64_t kMaxPacketPayloadSize = 64 * 1024 * 1024;
   // state machine
   static int expect_content = 0;
   static int expect_content_len = 0;
@@ -253,7 +278,15 @@ ssize_t parser(char *buf, ssize_t nread) {
   }
   if (queue_size < nread + queue_valid_size) {
     int new_size = 2 * (queue_valid_size + nread);
-    queue = realloc(queue, new_size);
+    char *new_queue = realloc(queue, new_size);
+    if (new_queue == NULL) {
+      log_error("parser realloc failed");
+      expect_content = 0;
+      expect_content_len = 0;
+      queue_valid_size = 0;
+      return -1;
+    }
+    queue = new_queue;
     queue_size = new_size;
   }
 
@@ -275,8 +308,23 @@ ssize_t parser(char *buf, ssize_t nread) {
       if ((queue_valid_size - ptr) < sizeof(int64_t)) {
         break;
       }
-      expect_content_len =
-          (*((int64_t *)(queue + ptr))) + sizeof(int64_t);  // add type
+      int64_t payload_size = 0;
+      memcpy(&payload_size, queue + ptr, sizeof(payload_size));
+      if (payload_size < 0 || payload_size > kMaxPacketPayloadSize) {
+        log_error("invalid packet payload size: %lld", payload_size);
+        expect_content = 0;
+        expect_content_len = 0;
+        queue_valid_size = 0;
+        return -1;
+      }
+      if (payload_size > INT_MAX - (int64_t)sizeof(int64_t)) {
+        log_error("packet payload too large for parser: %lld", payload_size);
+        expect_content = 0;
+        expect_content_len = 0;
+        queue_valid_size = 0;
+        return -1;
+      }
+      expect_content_len = (int)(payload_size + sizeof(int64_t));  // add type
       expect_content = 1;
       ptr += sizeof(int64_t);
     }
@@ -371,7 +419,12 @@ static void common_read_tty(uv_stream_t *stream, ssize_t nread,
 }
 
 void find_a_packet(char *buf, ssize_t len) {
-  int64_t type = *((int64_t *)buf);
+  if (len < (ssize_t)sizeof(int64_t)) {
+    log_error("invalid packet len: %zd", len);
+    return;
+  }
+  int64_t type = 0;
+  memcpy(&type, buf, sizeof(type));
   server_handle_client_packet(type, buf + sizeof(int64_t),
                               len - sizeof(int64_t));
 }
@@ -407,24 +460,56 @@ static int pty_nonblock(int fd) {
   return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-void background_loop(int in, int out, int argc, const char *argv[]) {
+void background_loop(int in, int out, int argc, char *argv[]) {
   static uv_timer_t timer_watcher;
   uv_loop_t *loop = uv_default_loop();
-  uv_timer_init(loop, &timer_watcher);
-  uv_timer_start(&timer_watcher, timer_callback, TIMEOUT_MS, REPEAT_MS);
+  int r = uv_timer_init(loop, &timer_watcher);
+  if (r != 0) {
+    log_error("uv_timer_init failed: %d", r);
+    return;
+  }
+  r = uv_timer_start(&timer_watcher, timer_callback, TIMEOUT_MS, REPEAT_MS);
+  if (r != 0) {
+    log_error("uv_timer_start failed: %d", r);
+    return;
+  }
 
-  uv_pipe_init(loop, &in_pipe, 0);
-  uv_pipe_init(loop, &out_pipe, 0);
+  r = uv_pipe_init(loop, &in_pipe, 0);
+  if (r != 0) {
+    log_error("uv_pipe_init in_pipe failed: %d", r);
+    return;
+  }
+  r = uv_pipe_init(loop, &out_pipe, 0);
+  if (r != 0) {
+    log_error("uv_pipe_init out_pipe failed: %d", r);
+    return;
+  }
   log_info("in:%d out:%d", in, out);
-  uv_pipe_open(&in_pipe, in);
-  uv_pipe_open(&out_pipe, out);
+  r = uv_pipe_open(&in_pipe, in);
+  if (r != 0) {
+    log_error("uv_pipe_open in_pipe failed: %d", r);
+    return;
+  }
+  r = uv_pipe_open(&out_pipe, out);
+  if (r != 0) {
+    log_error("uv_pipe_open out_pipe failed: %d", r);
+    return;
+  }
   write_client_pipe = &out_pipe;
-  uv_read_start((uv_stream_t *)&in_pipe, alloc_buffer,
-                common_read_data_from_cli);
+  r = uv_read_start((uv_stream_t *)&in_pipe, alloc_buffer,
+                    common_read_data_from_cli);
+  if (r != 0) {
+    log_error("uv_read_start in_pipe failed: %d", r);
+    return;
+  }
   const int UV_HANDLE_BLOCKING_WRITES = 0x00100000;
 
   int fd = get_pty_fd();
-  uv_tty_init(loop, &tty, fd, 1);
+  r = uv_tty_init(loop, &tty, fd, 1);
+  if (r != 0) {
+    log_error("uv_tty_init failed: %d", r);
+    return;
+  }
 
   pty_nonblock(fd);
   tty.flags &= ~UV_HANDLE_BLOCKING_WRITES;
@@ -432,7 +517,11 @@ void background_loop(int in, int out, int argc, const char *argv[]) {
   // uv_stream_set_blocking(write_client_pipe, true);
   //  uv_tty_set_mode(&tty, UV_TTY_MODE_NORMAL);
 
-  uv_read_start((uv_stream_t *)&tty, alloc_buffer, common_read_tty);
+  r = uv_read_start((uv_stream_t *)&tty, alloc_buffer, common_read_tty);
+  if (r != 0) {
+    log_error("uv_read_start tty failed: %d", r);
+    return;
+  }
   log_info("server6");
   // uv_prepare_t pp;
   // uv_prepare_init(loop, &pp);
@@ -445,7 +534,7 @@ void background_loop(int in, int out, int argc, const char *argv[]) {
 // PASS
 void send_exit_message(uv_async_t *handle) {
   // uv_msg_t *socket = (uv_msg_t *)handle->data;
-  int exitcode = (int)handle->data;
+  int exitcode = (int)(intptr_t)handle->data;
   comm_write_static_packet_to_cli(COMMAND_CMD_EXIT, &exitcode, sizeof(int));
   exiting = true;
   //free(handle); // TODO
@@ -454,18 +543,26 @@ void send_exit_message(uv_async_t *handle) {
 int pty_process_on_exit(int exitcode) {
   // TODO 模拟信号错误
   // tell client our exitcode.
-  async_process_exit->data = (void*)exitcode;
+  async_process_exit->data = (void *)(intptr_t)exitcode;
   uv_async_send(async_process_exit);
   return 0;
 }
 
-void server(int argc, const char *argv[]) {
+void server(int argc, char *argv[]) {
   // Close read end
   log_info("server");
   set_server_process();
   uv_loop_t *loop = uv_default_loop();
   async_process_exit = (uv_async_t *)malloc(sizeof(uv_async_t));
-  uv_async_init(loop, async_process_exit, send_exit_message);
+  if (async_process_exit == NULL) {
+    log_error("malloc async_process_exit failed");
+    exit(EXIT_FAILURE);
+  }
+  int rc = uv_async_init(loop, async_process_exit, send_exit_message);
+  if (rc != 0) {
+    log_error("uv_async_init async_process_exit failed: %d", rc);
+    exit(EXIT_FAILURE);
+  }
   pty_run(argc, argv, pty_process_on_exit);
   // close(1);
   // close(0);  //TODO linux 可以close，但是mac 关闭后会导致 libuv 异常 exit
@@ -485,45 +582,96 @@ void server(int argc, const char *argv[]) {
 void send_data_to_agent(char *buf, size_t size) {
   uv_write_t *req1 = malloc(sizeof(uv_write_t));
   uv_buf_t *b = malloc(sizeof(uv_buf_t));
-  size_t elen;
+  if (req1 == NULL || b == NULL) {
+    free(req1);
+    free(b);
+    log_error("malloc send_data_to_agent req failed");
+    return;
+  }
   char *buf_tmp = (char *)malloc(size + 2);
+  if (buf_tmp == NULL) {
+    free(req1);
+    free(b);
+    log_error("malloc send_data_to_agent buffer failed");
+    return;
+  }
   memcpy(buf_tmp, buf, size);
   memcpy(buf_tmp + size, "!\n", 2);
   b->base = buf_tmp;
   b->len = size + 2;
   req1->data = b;
-  uv_write(req1, (uv_stream_t *)&tty, b, 1, tty_write_cb_with_free);
+  int ret = uv_write(req1, (uv_stream_t *)&tty, b, 1, tty_write_cb_with_free);
+  if (ret != 0) {
+    free(((uv_buf_t *)(req1->data))->base);
+    free(req1->data);
+    free(req1);
+  }
 }
 
 void send_base64binary_to_agent(const char *buf, size_t size) {
   size_t elen = 0;
-  char *ebuf = base64_encode(buf, size, &elen);
+  unsigned char *ebuf =
+      base64_encode((const unsigned char *)buf, size, &elen);
+  if (ebuf == NULL) {
+    log_error("base64_encode failed");
+    return;
+  }
   //log_debug("server will write base64 %*s(%d)", elen, ebuf, elen);
   char *tmp = (char *)malloc(elen + 1);
+  if (tmp == NULL) {
+    free(ebuf);
+    log_error("malloc send_base64 buffer failed");
+    return;
+  }
   tmp[0] = 'B';
-  memcpy(tmp + 1, ebuf, elen);
+  memcpy(tmp + 1, (const char *)ebuf, elen);
   send_data_to_agent(tmp, elen + 1);
   free(tmp);
   free(ebuf);
 }
 
 int termtunnel_notify(void* s) {
-  uv_async_send(s);
+  return uv_async_send(s);
 }
 
 void get_args_done_callback(uv_async_t *a){
-  char* buf = malloc(READ_CHUNK_SIZE);
-  memcpy(buf, &g_oneshot_argc, sizeof(int32_t));
-  char* wptr = buf + sizeof(int32_t)/sizeof(char);
+  size_t total_size = sizeof(int32_t);
+  if (g_oneshot_argc < 0) {
+    g_oneshot_argc = 0;
+  }
   for (int i = 0; i < g_oneshot_argc; i++) {
-    memcpy(wptr, g_oneshot_argv[i], strlen(g_oneshot_argv[i])+1);
-    wptr += strlen(g_oneshot_argv[i]) + 1;
+    if (g_oneshot_argv == NULL || g_oneshot_argv[i] == NULL) {
+      continue;
+    }
+    size_t arg_len = strlen(g_oneshot_argv[i]) + 1;
+    if (total_size > SIZE_MAX - arg_len) {
+      log_error("get_args_done_callback size overflow");
+      total_size = sizeof(int32_t);
+      g_oneshot_argc = 0;
+      break;
+    }
+    total_size += arg_len;
+  }
+  char *buf = malloc(total_size);
+  if (buf == NULL) {
+    log_error("get_args_done_callback malloc failed");
+    return;
+  }
+  memcpy(buf, &g_oneshot_argc, sizeof(int32_t));
+  char *wptr = buf + sizeof(int32_t);
+  for (int i = 0; i < g_oneshot_argc; i++) {
+    if (g_oneshot_argv == NULL || g_oneshot_argv[i] == NULL) {
+      continue;
+    }
+    size_t arg_len = strlen(g_oneshot_argv[i]) + 1;
+    memcpy(wptr, g_oneshot_argv[i], arg_len);
+    wptr += arg_len;
     free(g_oneshot_argv[i]);
   }
   free(g_oneshot_argv);
   g_oneshot_argv = NULL;
   g_oneshot_argc = 0;
-  comm_write_packet_to_cli(COMMAND_GET_ARGS_REPLY, buf, wptr - buf);
+  comm_write_packet_to_cli(COMMAND_GET_ARGS_REPLY, buf, (size_t)(wptr - buf));
   // free(a); //TODO!!!
 }
 
@@ -531,9 +679,23 @@ void get_args_done_callback(uv_async_t *a){
 int call_bootstrap_get_args(get_args_callback bootstrap_args_ready) {
   // async
   uv_async_t *s = malloc(sizeof(uv_async_t));
-  uv_async_init(uv_default_loop(), s, (uv_async_cb)bootstrap_args_ready);
+  if (s == NULL) {
+    log_error("malloc async callback failed");
+    return -1;
+  }
+  int rc = uv_async_init(uv_default_loop(), s, (uv_async_cb)bootstrap_args_ready);
+  if (rc != 0) {
+    free(s);
+    log_error("uv_async_init bootstrap args failed: %d", rc);
+    return -1;
+  }
   pthread_t p;
-  pthread_create(&p, NULL, (void*)bootstrap_get_args, s);
+  rc = pthread_create(&p, NULL, (void*)bootstrap_get_args, s);
+  if (rc != 0) {
+    free(s);
+    log_error("pthread_create bootstrap args failed: %d", rc);
+    return -1;
+  }
   pthread_detach(p);
   return 0;
 }
@@ -544,10 +706,25 @@ void server_handle_client_packet(int64_t type, char *buf, ssize_t len) {
       // from cli keyborad stream
       uv_write_t *req1 = malloc(sizeof(uv_write_t));
       uv_buf_t *b = malloc(sizeof(uv_buf_t));
+      if (req1 == NULL || b == NULL) {
+        free(req1);
+        free(b);
+        break;
+      }
       b->base = memdup(buf, len);
+      if (b->base == NULL) {
+        free(b);
+        free(req1);
+        break;
+      }
       b->len = len;
       req1->data = b;
-      uv_write(req1, (uv_stream_t *)&tty, b, 1, tty_write_cb_with_free);
+      int ret = uv_write(req1, (uv_stream_t *)&tty, b, 1, tty_write_cb_with_free);
+      if (ret != 0) {
+        free(((uv_buf_t *)(req1->data))->base);
+        free(req1->data);
+        free(req1);
+      }
       break;
     }
     case COMMAND_TTY_WIN_RESIZE: {
@@ -673,12 +850,14 @@ void server_handle_green_packet(char *buf, int size) {
   }
   if (size > 1 && buf[0] == 'B') {
     size_t result_len = 0;
-    char *result = base64_decode(buf + 1, size - 1, &result_len);
+    unsigned char *result =
+        base64_decode((const unsigned char *)(buf + 1), size - 1,
+                      &result_len);
     if (result_len == 0 || result == NULL) {
       log_error("found a error base64 [%*s]\n", size - 1, buf + 1);
       return;
     }
-    server_handle_agent_data(result, result_len);
+    server_handle_agent_data((char *)result, result_len);
     free(result);
   }
   return;

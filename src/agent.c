@@ -8,6 +8,7 @@
 
 #include <fcntl.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -104,9 +105,18 @@ void agent_set_stdin_noecho() {
 void write_frame_to_server(char *data, int data_size) {
   int len_result;
   char *tmp = (char *)malloc(data_size + 1);
+  if (tmp == NULL) {
+    log_error("malloc frame buffer failed");
+    return;
+  }
   memcpy(tmp, data, data_size);
   tmp[data_size] = '!';
   char *result = green_encode(tmp, data_size + 1, &len_result);
+  if (result == NULL) {
+    free(tmp);
+    log_error("green_encode failed");
+    return;
+  }
   agent_write_data_to_server(result, len_result, true);
   free(tmp);
 }
@@ -148,19 +158,53 @@ void agent_read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     }
 
     static char *data = NULL;
+    static size_t data_cap = 0;
     if (data == NULL) {
-      data = (char *)malloc(2 * max_suggested_size);
+      data_cap = 2 * (size_t)max_suggested_size;
+      data = (char *)malloc(data_cap);
+      if (data == NULL) {
+        log_error("malloc stdin buffer failed");
+        if (buf->base) {
+          free(buf->base);
+        }
+        return;
+      }
     }
     static int data_size = 0;
     CHECK(nread <= max_suggested_size, "nread<=max_suggested_size");
+    if ((size_t)data_size + (size_t)nread > data_cap) {
+      size_t need = (size_t)data_size + (size_t)nread;
+      size_t new_cap = data_cap;
+      while (new_cap < need) {
+        if (new_cap > SIZE_MAX / 2) {
+          log_error("stdin buffer overflow risk");
+          uv_read_stop(stream);
+          if (buf->base) {
+            free(buf->base);
+          }
+          return;
+        }
+        new_cap *= 2;
+      }
+      char *new_data = realloc(data, new_cap);
+      if (new_data == NULL) {
+        log_error("realloc stdin buffer failed");
+        uv_read_stop(stream);
+        if (buf->base) {
+          free(buf->base);
+        }
+        return;
+      }
+      data = new_data;
+      data_cap = new_cap;
+    }
     memcpy(data + data_size, buf->base, nread);
     data_size += nread;
-    CHECK(data_size <= 2 * max_suggested_size, "data_size>=2*max_suggested_size");
 
     int used_data_size = process_stdin(data, data_size);
     int unused_data_size = data_size - used_data_size;
     if (unused_data_size > 0) {
-      CHECK(unused_data_size < max_suggested_size, "erorr");
+      CHECK((size_t)unused_data_size <= data_cap, "unused_data_size overflow");
       memmove(data, data + used_data_size, unused_data_size);
     }
     data_size = unused_data_size;
@@ -175,15 +219,26 @@ int write_binary_to_server(const char *buf, size_t size) {
   // base64
 
   size_t elen = 0;
-  char *ebuf = base64_encode(buf, size, &elen);
+  unsigned char *ebuf =
+      base64_encode((const unsigned char *)buf, size, &elen);
+  if (ebuf == NULL) {
+    log_error("base64_encode failed");
+    return -1;
+  }
 
   char *tmp = (char *)malloc(elen + 1);
+  if (tmp == NULL) {
+    free(ebuf);
+    log_error("malloc base64 buffer failed");
+    return -1;
+  }
   tmp[0] = 'B';
-  memcpy(tmp + 1, ebuf, elen);
+  memcpy(tmp + 1, (const char *)ebuf, elen);
   write_frame_to_server(tmp, elen + 1);
 
   free(tmp);
   free(ebuf);
+  return 0;
 }
 int agent_handle_binary(char *buf, int size);
 
@@ -213,13 +268,15 @@ int agent_process_frame(char *str_data, int data_size) {
   // base64 type
   if (data_size > 1 && str_data[0] == 'B') {
     size_t result_len = 0;
-    char *result = base64_decode(str_data + 1, data_size - 1, &result_len);
+    unsigned char *result =
+        base64_decode((const unsigned char *)(str_data + 1), data_size - 1,
+                      &result_len);
     if (result_len == 0) {
       // TODO!
       log_error("found a error base64 [%*s]\n", data_size - 1, str_data + 1);
       return 0;
     }
-    agent_handle_binary(result, result_len);
+    agent_handle_binary((char *)result, result_len);
     free(result);
     return 0;
   } else {
@@ -242,17 +299,36 @@ void agent_write_data_to_server(char *buf, size_t s, bool autofree) {
   pending_send++;
   uv_write_t *req1 = malloc(sizeof(uv_write_t));
   uv_buf_t *b = malloc(sizeof(uv_buf_t));
+  if (req1 == NULL || b == NULL) {
+    free(req1);
+    free(b);
+    if (autofree) {
+      free(buf);
+    }
+    pending_send--;
+    log_error("malloc uv write request failed");
+    return;
+  }
   b->base = buf;
   b->len = s;
   req1->data = b;
   if (autofree) {
     int ret = uv_write(req1, (uv_stream_t *)&agent_stdout_tty, b, 1,
                        write_cb_with_free);
-    // assert(ret==0);
+    if (ret != 0) {
+      pending_send--;
+      free(((uv_buf_t *)(req1->data))->base);
+      free(req1->data);
+      free(req1);
+    }
   } else {
     int ret = uv_write(req1, (uv_stream_t *)&agent_stdout_tty, b, 1,
                        write_cb_without_free);
-    // assert(ret==0);
+    if (ret != 0) {
+      pending_send--;
+      free(req1->data);
+      free(req1);
+    }
   }
 }
 
@@ -291,13 +367,33 @@ void agent(int argc, char** argv) {
 
   static uv_timer_t timer_watcher;
   uv_loop_t *loop = uv_default_loop();
-  uv_timer_init(loop, &timer_watcher);
-  uv_timer_start(&timer_watcher, agent_timer_callback, TIMEOUT_MS, REPEAT_MS);
+  int rc = uv_timer_init(loop, &timer_watcher);
+  if (rc != 0) {
+    log_error("uv_timer_init failed: %d", rc);
+    exit(EXIT_FAILURE);
+  }
+  rc = uv_timer_start(&timer_watcher, agent_timer_callback, TIMEOUT_MS, REPEAT_MS);
+  if (rc != 0) {
+    log_error("uv_timer_start failed: %d", rc);
+    exit(EXIT_FAILURE);
+  }
 
-  uv_tty_init(loop, &agent_stdin_tty, STDIN_FILENO, 1);
-  uv_tty_init(loop, &agent_stdout_tty, STDOUT_FILENO, 0);
-  uv_read_start((uv_stream_t *)&agent_stdin_tty, alloc_buffer,
-                agent_read_stdin);
+  rc = uv_tty_init(loop, &agent_stdin_tty, STDIN_FILENO, 1);
+  if (rc != 0) {
+    log_error("uv_tty_init stdin failed: %d", rc);
+    exit(EXIT_FAILURE);
+  }
+  rc = uv_tty_init(loop, &agent_stdout_tty, STDOUT_FILENO, 0);
+  if (rc != 0) {
+    log_error("uv_tty_init stdout failed: %d", rc);
+    exit(EXIT_FAILURE);
+  }
+  rc = uv_read_start((uv_stream_t *)&agent_stdin_tty, alloc_buffer,
+                     agent_read_stdin);
+  if (rc != 0) {
+    log_error("uv_read_start agent stdin failed: %d", rc);
+    exit(EXIT_FAILURE);
+  }
 
   libuv_add_vnet_notify();
   vnet_init(vnet_notify_to_libuv);

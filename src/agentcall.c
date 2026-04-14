@@ -31,6 +31,7 @@
 #include "portforward.h"
 
 static uint16_t agentcall_service_port = 300;
+static const int32_t kMaxOneshotArgc = 1024;
 
 typedef struct thread_arg_pass_t {
   char *strbuf;
@@ -38,7 +39,7 @@ typedef struct thread_arg_pass_t {
 } thread_arg_pass_t;
 
 static void agentcall_server_request(void *p) {
-  int sd = (int)p;
+  int sd = (int)(intptr_t)p;
   vnet_setsocketdefaultopt(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
@@ -58,8 +59,13 @@ static void agentcall_server_request(void *p) {
     char remote_host[IPV4_AND_IPV6_MAX_LENGTH];
     uint16_t local_port;
     uint16_t remote_port;
-    sscanf(recv_buf, "%64[^:]:%hu:%64[^:]:%hu",
-             &local_host, &local_port, &remote_host, &remote_port);
+    int parsed = sscanf(recv_buf, "%63[^:]:%hu:%63[^:]:%hu", local_host,
+                        &local_port, remote_host, &remote_port);
+    if (parsed != 4) {
+      log_error("invalid METHOD_CALL_FORWARD_STATIC payload: %s", recv_buf);
+      lwip_close(sd);
+      return;
+    }
     log_info("agent will bind %s:%hu, write to %s:%hu",
              local_host, local_port, remote_host, remote_port);
     portforward_static_start(local_host, local_port, remote_host,
@@ -108,10 +114,23 @@ int bootstrap_get_args(void * _) {
   vnet_send(nfd, &method, sizeof(int32_t));
   vnet_send(nfd, "", 1);
   int32_t argc;
-  vnet_readn(nfd, &argc, sizeof(int32_t));
+  if (vnet_readn(nfd, &argc, sizeof(int32_t)) == 0) {
+    vnet_close(nfd);
+    return 0;
+  }
+  if (argc < 0 || argc > kMaxOneshotArgc) {
+    log_error("invalid argc from agent: %d", argc);
+    vnet_close(nfd);
+    return 0;
+  }
   log_debug("count of arg %d", argc);
   g_oneshot_argc = argc;
-  g_oneshot_argv = malloc(argc * sizeof(char*));
+  g_oneshot_argv = malloc(argc * sizeof(char *));
+  if (g_oneshot_argv == NULL && argc > 0) {
+    log_error("malloc g_oneshot_argv failed");
+    vnet_close(nfd);
+    return 0;
+  }
   char recv_buf[READ_CHUNK_SIZE];
   for (int i=0; i < argc; i++) {
     if (vnet_readstring(nfd, recv_buf, READ_CHUNK_SIZE) == 0) {

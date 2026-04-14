@@ -19,5 +19,5 @@ extern void interact_run(int _in, int _out);
 extern int get_repl_stdout();
 
 extern void oneshot_run(int _in, int _out);
-extern void send_binary(int fd, int64_t type, char *addr, int len);
+extern void send_binary(int fd, int64_t type, const void *addr, int len);
 #endif

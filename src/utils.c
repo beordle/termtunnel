@@ -30,7 +30,7 @@
 struct termios ttystate_backup;
 static bool _stdin_is_raw = false;
 
-const char *green_encode(const char *buf, int len, int *result_len) {
+char *green_encode(const char *buf, int len, int *result_len) {
   const char *prefix = "\e[32;42m";
   const int prefix_len = sizeof("\e[32;42m") - 1;
   const char *postfix = "\e[0m";
@@ -147,4 +147,3 @@ char* safe_gethostbyname(char *host, uint16_t port) {
     }
     return NULL;
 }
-
