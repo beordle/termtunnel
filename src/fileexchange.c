@@ -6,6 +6,7 @@
  */
 
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +37,7 @@ typedef struct path_exchange {
 } path_exchange_t;
 
 static int file_receiver_request(void *p) {
-  int sd = (int)p;
+  int sd = (int)(intptr_t)p;
   vnet_setsocketdefaultopt(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
@@ -76,7 +77,7 @@ int file_receiver_start() {
 }
 
 static int file_sender_request(void *p) {
-  int sd = (int)p;
+  int sd = (int)(intptr_t)p;
   vnet_setsocketdefaultopt(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
@@ -155,8 +156,18 @@ static int file_send_request(path_exchange_t *pe) {
 int file_send_start(char *src_path, char *dst_path) {
   log_info("file_send_start1");
   path_exchange_t *pe = (path_exchange_t *)malloc(sizeof(path_exchange_t));
-  strcpy(pe->src_path, src_path);
-  strcpy(pe->dst_path, dst_path);
+  if (pe == NULL) {
+    log_error("malloc path_exchange_t failed");
+    return -1;
+  }
+  if (snprintf(pe->src_path, sizeof(pe->src_path), "%s", src_path) >=
+          (int)sizeof(pe->src_path) ||
+      snprintf(pe->dst_path, sizeof(pe->dst_path), "%s", dst_path) >=
+          (int)sizeof(pe->dst_path)) {
+    log_error("file path too long");
+    free(pe);
+    return -1;
+  }
   // TODO
   // if (stat(src_path, NULL)==0){
   // pe->exchange_notify->data=(void*)-1;
@@ -214,8 +225,18 @@ static int file_recv_request(path_exchange_t *pe) {
 
 int file_recv_start(char *src_path, char *dst_path) {
   path_exchange_t *pe = (path_exchange_t *)malloc(sizeof(path_exchange_t));
-  strcpy(pe->src_path, src_path);
-  strcpy(pe->dst_path, dst_path);
+  if (pe == NULL) {
+    log_error("malloc path_exchange_t failed");
+    return -1;
+  }
+  if (snprintf(pe->src_path, sizeof(pe->src_path), "%s", src_path) >=
+          (int)sizeof(pe->src_path) ||
+      snprintf(pe->dst_path, sizeof(pe->dst_path), "%s", dst_path) >=
+          (int)sizeof(pe->dst_path)) {
+    log_error("file path too long");
+    free(pe);
+    return -1;
+  }
   log_debug("file_recv_start");
   sys_thread_new("file_recv", (lwip_thread_fn)file_recv_request, (void *)pe,
                  DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);

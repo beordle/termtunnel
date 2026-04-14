@@ -77,19 +77,25 @@ int readn(int fd, void *buf, int n) {
 
 int readtocharR(int fd, char *buf, int bufsize) {
   int readbytes = 0;
-  char* last;
-  do {
-      int n = lwip_read(fd, buf + readbytes, 1);
+  while (readbytes < bufsize) {
+    int n = lwip_read(fd, buf + readbytes, 1);
+    if (n < 0) {
       if (errno == EINTR || errno == EAGAIN) {
         continue;
       }
-      if (n <= 0) {
-        return 0;
-      }
-      readbytes += 1;
-      last = buf + readbytes - 1;
-    } while (strncmp(last-3 ,"\r\n\r\n", 4)!=0 && readbytes < bufsize);
-    return readbytes;
+      return -1;
+    }
+    if (n == 0) {
+      return 0;
+    }
+    readbytes += n;
+    // Require at least 4 bytes before checking CRLFCRLF to avoid OOB access.
+    if (readbytes >= 4 &&
+        memcmp(buf + readbytes - 4, "\r\n\r\n", 4) == 0) {
+      break;
+    }
+  }
+  return readbytes;
 }
 
 int report_error_to_client(int fd, char *message) {
@@ -98,7 +104,7 @@ int report_error_to_client(int fd, char *message) {
   }
   char buffer[512];
   snprintf(buffer, sizeof(buffer), "HTTP/1.1 500 Internal Server Error %s\r\n\r\n", message);
-  lwip_writen(fd, buffer, strlen(buffer));
+  return lwip_writen(fd, buffer, strlen(buffer));
 }
 
 int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
@@ -108,17 +114,23 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
   char *url;
   char host[128];
   char *h, *rest;
+  char *host_end = host + sizeof(host) - 1;
   uint16_t port;
   char cmd[16];
   int read_bytes = 0;
   char *header = NULL;
   // char *prefetch_data, prefetch_data_size);
   //  TODO read to HTTP1.1
+  if (prefetch_data_size < 0 ||
+      prefetch_data_size >= (int)sizeof(buffer) - 1) {
+    log_info("invalid prefetch size: %d", prefetch_data_size);
+    return 0;
+  }
   memcpy(buffer, prefetch_data, prefetch_data_size);
   //int n = lwip_read(fd, buffer + prefetch_data_size,
   //              sizeof(buffer) - prefetch_data_size);
   int n = readtocharR(fd, buffer + prefetch_data_size,
-                sizeof(buffer) - prefetch_data_size);
+                      sizeof(buffer) - 1 - prefetch_data_size);
   header = buffer;
   read_bytes = n + prefetch_data_size;
   if (n < 1) {
@@ -128,6 +140,7 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
     }
     return 0;
   }
+  buffer[read_bytes] = '\0';
   log_info("prefetch %d bytes", n);
   int i = 0;
   for (i = 0; i < 15; i++)
@@ -149,14 +162,28 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
     // CONNECT g.cn:443 HTTP/1.1
     url = buffer + 8;  //"CONNECT "
     h = host;
-    for (; *url && (*url != ':') && (*url != '/'); url++) *(h++) = *url;
+    for (; *url && (*url != ':') && (*url != '/') && (*url != ' ') &&
+           (h < host_end);
+         url++)
+      *(h++) = *url;
     *h = '\0';
+    if (*url == ' ' || *url == '\0') {
+      report_error_to_client(fd, "invalid CONNECT request");
+      lwip_close(fd);
+      return 0;
+    }
     if (*url == ':') {
       port = strtoul(url + 1, NULL, 0);
-      for (; *url != '/'; url++)
-        ;
+      while (*url && *url != '/' && *url != ' ' && *url != '\r' &&
+             *url != '\n')
+        url++;
     } else {
       port = httpport;
+    }
+    if (*url == '\0' || *url == '\r' || *url == '\n') {
+      report_error_to_client(fd, "invalid CONNECT request");
+      lwip_close(fd);
+      return 0;
     }
     for (rest = url; *rest && (*rest != '\n'); rest++);
     if (*rest) {
@@ -165,16 +192,35 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
     }
   } else {
     //GET http://g.cn:80
-    for (url = buffer; *url && (*url != '/'); url++);
+    for (url = buffer; *url && (*url != '/'); url++)
+      ;
+    if (*url == '\0') {
+      report_error_to_client(fd, "invalid HTTP request");
+      lwip_close(fd);
+      return 0;
+    }
     url += 2;
     h = host;
-    for (; *url && (*url != ':') && (*url != '/'); url++) *(h++) = *url;
+    for (; *url && (*url != ':') && (*url != '/') && (h < host_end); url++)
+      *(h++) = *url;
     *h = '\0';
+    if (*url == '\0') {
+      report_error_to_client(fd, "invalid HTTP request");
+      lwip_close(fd);
+      return 0;
+    }
     if (*url == ':') {
       port = strtoul(url + 1, NULL, 0);
-      for (; *url != '/'; url++);
+      while (*url && *url != '/' && *url != ' ' && *url != '\r' &&
+             *url != '\n')
+        url++;
     } else {
       port = httpport;
+    }
+    if (*url == '\0' || *url == '\r' || *url == '\n') {
+      report_error_to_client(fd, "invalid HTTP request");
+      lwip_close(fd);
+      return 0;
     }
     for (rest = url; *rest && (*rest != '\n'); rest++);
     if (*rest) {
@@ -207,7 +253,7 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
     return 0;
   }
   if (strcmp(cmd, "CONNECT") != 0) {
-    sprintf(buf2, "%s %s\n", cmd, url);
+    snprintf(buf2, sizeof(buf2), "%s %s\n", cmd, url);
     if (write(rfd, buf2, strlen(buf2)) < 1) {
       lwip_close(fd);
       close(rfd);
@@ -236,6 +282,7 @@ int http_proxy(int fd, char *prefetch_data, int prefetch_data_size) {
 
   close(rfd);
   lwip_close(fd);
+  return 0;
 }
 
 void app_thread_exit(int ret, int fd) {
@@ -485,7 +532,7 @@ void socks4_send_response(int fd, int status) {
 }
 
 void *app_thread_process(void *fd) {
-  int net_fd = (int)fd;
+  int net_fd = (int)(intptr_t)fd;
   vnet_setsocketdefaultopt(net_fd);
   int version = 0;
   int inet_fd = -1;

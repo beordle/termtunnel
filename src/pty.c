@@ -148,8 +148,11 @@ int pty_run(int argc, char *argv[], tell_exitcode_callback *cb) {
 
   myself_fd = STDIN_FILENO;  // open("/dev/tty", O_RDONLY| O_NOCTTY);
   char *name = (char *)malloc(PATH_MAX);
-  ptsname_r(pty_fd, name, PATH_MAX);
   if (name == NULL) {
+    exit(EXIT_FAILURE);
+  }
+  if (ptsname_r(pty_fd, name, PATH_MAX) != 0) {
+    free(name);
     exit(EXIT_FAILURE);
   }
   // fcntl(pty_fd, F_SETFL, O_NONBLOCK);
@@ -177,9 +180,20 @@ int pty_run(int argc, char *argv[], tell_exitcode_callback *cb) {
 
     thread_pass_arg_t *temp =
         (thread_pass_arg_t *)malloc(sizeof(thread_pass_arg_t));
+    if (temp == NULL) {
+      free(name);
+      close(pty_fd);
+      return -1;
+    }
     temp->cb_func = cb;
     temp->process_pid = pid;
-    pthread_create(&thr, NULL, (void*)do_waitpid_wrap, temp);
+    int rc = pthread_create(&thr, NULL, (void *)do_waitpid_wrap, temp);
+    if (rc != 0) {
+      free(temp);
+      free(name);
+      close(pty_fd);
+      return -1;
+    }
     pthread_detach(thr);
   }
   free(name);

@@ -38,10 +38,11 @@ int64_t ping_count = 0;
 
 int get_repl_stdout() { return out; }
 
-ssize_t expect_write(int fd, char *buf, size_t expect_size) {
+ssize_t expect_write(int fd, const void *buf, size_t expect_size) {
   size_t writebytes = 0;
+  const char *ptr = (const char *)buf;
   while (writebytes < expect_size) {
-    int wb = write(fd, buf + writebytes, expect_size - writebytes);
+    int wb = write(fd, ptr + writebytes, expect_size - writebytes);
     if (wb < 0) {
       if (errno == EINTR) {
         keyboard_break = true;
@@ -55,20 +56,26 @@ ssize_t expect_write(int fd, char *buf, size_t expect_size) {
 }
 
 // 一般会在 server_handle_client_packet进行处理
-void send_binary(int fd, int64_t type, char *addr, int len) {
+void send_binary(int fd, int64_t type, const void *addr, int len) {
   int ret = 0;
-  ret = expect_write(fd, &len, sizeof(int64_t));
+  int64_t len64 = len;
+  ret = expect_write(fd, &len64, sizeof(len64));
   CHECK(ret == sizeof(int64_t), "ret:%d sizeof(len):%d", ret, sizeof(int64_t));
   ret = expect_write(fd, &type, sizeof(type));
   CHECK(ret == sizeof(int64_t), "ret:%d sizeof(type):%d", ret, sizeof(int64_t));
-  ret = expect_write(fd, addr, len);
+  if (len > 0) {
+    ret = expect_write(fd, addr, len);
+  } else {
+    ret = 0;
+  }
   CHECK(ret == len, "ret:%d len:%d", ret, len);
 }
 
-ssize_t expect_read(int fd, char *buf, size_t expect_size) {
+ssize_t expect_read(int fd, void *buf, size_t expect_size) {
   size_t readbytes = 0;
+  char *ptr = (char *)buf;
   while (readbytes < expect_size) {
-    int rb = read(fd, buf + readbytes, expect_size - readbytes);
+    int rb = read(fd, ptr + readbytes, expect_size - readbytes);
     if (rb < 0) {
       if (errno == EINTR) {
         keyboard_break = true;
@@ -85,8 +92,11 @@ ssize_t expect_read(int fd, char *buf, size_t expect_size) {
 }
 
 void recv_data(int fd, int64_t *type, char **retbuf, int64_t *sz) {
+  const int64_t kMaxMessageSize = 64 * 1024 * 1024;  // defensive cap
   char *buf = (char *)malloc(sizeof(int64_t));
   *sz = 0;
+  *retbuf = NULL;
+  *type = 0;
   int a = expect_read(fd, buf, sizeof(int64_t));
   if (a == 0) {
     log_error("expect read 0");
@@ -95,6 +105,11 @@ void recv_data(int fd, int64_t *type, char **retbuf, int64_t *sz) {
   }
   CHECK(a == sizeof(int64_t), "a: %d", a);
   int64_t msg_size = *((int64_t *)buf);
+  if (msg_size < 0 || msg_size > kMaxMessageSize) {
+    log_error("invalid message size: %lld", msg_size);
+    free(buf);
+    return;
+  }
   a = expect_read(fd, buf, sizeof(int64_t));
   if (a == 0) {
     free(buf);
@@ -102,7 +117,13 @@ void recv_data(int fd, int64_t *type, char **retbuf, int64_t *sz) {
   }
   *type = *((int64_t *)buf);
   if (msg_size != 0) {
-    buf = realloc(buf, msg_size);
+    char *new_buf = realloc(buf, msg_size);
+    if (new_buf == NULL) {
+      free(buf);
+      log_error("realloc failed for message size: %lld", msg_size);
+      return;
+    }
+    buf = new_buf;
   }
   a = expect_read(fd, buf, msg_size);
   CHECK(a == msg_size, "a: %d,msg_size: %lld\n", a, msg_size);
@@ -165,7 +186,7 @@ void test_split(const char *s) {
   strcpy(buf, s);
   argc = split(buf, argv, 20);
   printf("input: '%s'\n", s);
-  for (i = 0; i < argc; i++) printf("[%u] '%s'\n", i, argv[i]);
+  for (i = 0; i < argc; i++) printf("[%zu] '%s'\n", i, argv[i]);
 }
 
 void completion(const char *buf, linenoiseCompletions *lc) {
@@ -212,14 +233,24 @@ int hello_func(int argc, char **argv) {
     printf("hello [message]\n");
     return 0;
   }
+  return 0;
 }
 
 file_exchange_intent_t *new_file_exchange_intent(char *src, char *dst,
                                                  int trans_mode) {
   file_exchange_intent_t *tmp =
       (file_exchange_intent_t *)malloc(sizeof(file_exchange_intent_t));
-  strcpy(tmp->src_path, src);
-  strcpy(tmp->dst_path, dst);
+  if (tmp == NULL) {
+    return NULL;
+  }
+  if (snprintf(tmp->src_path, sizeof(tmp->src_path), "%s", src) >=
+          (int)sizeof(tmp->src_path) ||
+      snprintf(tmp->dst_path, sizeof(tmp->dst_path), "%s", dst) >=
+          (int)sizeof(tmp->dst_path)) {
+    log_error("file path too long");
+    free(tmp);
+    return NULL;
+  }
   tmp->trans_mode = trans_mode;
   return tmp;
 }
@@ -230,9 +261,18 @@ port_forward_intent_t *new_port_forward_intent(int forward_type, char *src_host,
                                                uint16_t dst_port) {
   port_forward_intent_t *tmp =
       (port_forward_intent_t *)malloc(sizeof(port_forward_intent_t));
+  if (tmp == NULL) {
+    return NULL;
+  }
   tmp->forward_type = forward_type;
-  strcpy(tmp->src_host, src_host);
-  strcpy(tmp->dst_host, dst_host);
+  if (snprintf(tmp->src_host, sizeof(tmp->src_host), "%s", src_host) >=
+          (int)sizeof(tmp->src_host) ||
+      snprintf(tmp->dst_host, sizeof(tmp->dst_host), "%s", dst_host) >=
+          (int)sizeof(tmp->dst_host)) {
+    log_error("host too long");
+    free(tmp);
+    return NULL;
+  }
   tmp->src_port = src_port;
   tmp->dst_port = dst_port;
   return tmp;
@@ -257,6 +297,10 @@ int portforward_func(int argc, char **argv) {
 
   port_forward_intent_t *a = new_port_forward_intent(
       forward_type, src_host, src_port, dst_host, dst_port);
+  if (a == NULL) {
+    printf("invalid forward args\n");
+    return 0;
+  }
   send_binary(out, COMMAND_PORT_FORWARD, a, sizeof(port_forward_intent_t));
   free(a);
 
@@ -267,7 +311,7 @@ int portforward_func(int argc, char **argv) {
   if (type == COMMAND_RETURN) {
     printf("%s", buf);
   } else {
-    printf("type: %d", type);
+    printf("type: %lld", type);
   }
   free(buf);
 
@@ -277,6 +321,10 @@ int portforward_func(int argc, char **argv) {
 
 int upload_func(int argc, char **argv) {
   char *url = (char *)malloc(PATH_MAX);
+  if (url == NULL) {
+    printf("malloc failed\n");
+    return 0;
+  }
   if (argc == 1) {
     // static
     char *_url = tinyfd_openFileDialog("Upload", "", 0, NULL,
@@ -286,15 +334,27 @@ int upload_func(int argc, char **argv) {
       printf("Path not exist\n");
       return 0;
     }
-    strcpy(url, _url);
+    if (snprintf(url, PATH_MAX, "%s", _url) >= PATH_MAX) {
+      free(url);
+      printf("Path too long\n");
+      return 0;
+    }
   } else {
-    strcpy(url, argv[1]);
+    if (snprintf(url, PATH_MAX, "%s", argv[1]) >= PATH_MAX) {
+      free(url);
+      printf("Path too long\n");
+      return 0;
+    }
   }
   printf("upload %s\n", url);
   char *tmp = strdup(url);
   char *bname = basename(tmp);
   file_exchange_intent_t *a =
       new_file_exchange_intent(url, bname, TRANS_MODE_SEND_FILE);
+  if (a == NULL) {
+    free(url);
+    return 0;
+  }
   free(tmp);
 
   send_binary(out, COMMAND_FILE_EXCHANGE, a, sizeof(file_exchange_intent_t));
@@ -309,6 +369,10 @@ int download_func(int argc, char **argv) {
     return 0;
   }
   char *url = (char *)malloc(PATH_MAX);
+  if (url == NULL) {
+    printf("malloc failed\n");
+    return 0;
+  }
 
   // select folder to download
   if (argc == 2) {
@@ -319,7 +383,11 @@ int download_func(int argc, char **argv) {
       printf("Path not exist\n");
       return 0;
     }
-    strcpy(url, _url);
+    if (snprintf(url, PATH_MAX, "%s", _url) >= PATH_MAX) {
+      free(url);
+      printf("Path too long\n");
+      return 0;
+    }
   } else {
     // TODO 后续允许自行制定文件夹
     printf("download [remote_file]\n");
@@ -331,11 +399,22 @@ int download_func(int argc, char **argv) {
   char *bname = basename(tmp_pf);
   file_exchange_intent_t *a =
       new_file_exchange_intent(src, url, TRANS_MODE_RECV_FILE);
+  if (a == NULL) {
+    free(url);
+    free(tmp_pf);
+    return 0;
+  }
 
-  
-  strcat(a->dst_path, "/"); // linux without /
+  if (snprintf(a->dst_path, sizeof(a->dst_path), "%s/%s", url, bname) >=
+      (int)sizeof(a->dst_path)) {
+    printf("Path too long\n");
+    free(url);
+    free(a);
+    free(tmp_pf);
+    return 0;
+  }
+  // linux without /
   // TODO macos ok, linux is ok?
-  strcat(a->dst_path, bname);
   send_binary(out, COMMAND_FILE_EXCHANGE, a, sizeof(file_exchange_intent_t));
   free(url);
   free(a);

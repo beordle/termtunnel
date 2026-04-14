@@ -28,7 +28,7 @@ extern int writen(int fd, void *buf, int n);
 extern void set_stdin_raw();
 extern void restore_stdin();
 extern void *memdup(const void *src, size_t n);
-extern const char *green_encode(const char *buf, int len, int *result_len);
+extern char *green_encode(const char *buf, int len, int *result_len);
 
 
 extern void utils_counter_init(struct counter_t *c);

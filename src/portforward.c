@@ -9,6 +9,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -49,7 +50,7 @@ typedef struct port_listen {
 } port_listen_t;
 
 static void portforward_static_server_request(void *p) {
-  int sd = (int)p;
+  int sd = (int)(intptr_t)p;
   vnet_setsocketdefaultopt(sd);
   char recv_buf[READ_CHUNK_SIZE];
   int n, nwrote;
@@ -241,10 +242,19 @@ static void loop_socket_to_lwipsocket(int *arg) {
 // 就直接启动两个线程即可。无法一起select。因为一个是lwip的fd一个是真实的fd。
 int pipe_lwip_socket_and_socket_pair(int lwip_fd, int fd) {
   int *array = (int *)malloc(2 * sizeof(int));
+  if (array == NULL) {
+    return -1;
+  }
   *(array) = lwip_fd;
   *(array + 1) = fd;
   pthread_t worker2;
-  pthread_create(&worker2, NULL, (void*)&loop_socket_to_lwipsocket, (void *)array);
+  int rc =
+      pthread_create(&worker2, NULL, (void *)&loop_socket_to_lwipsocket,
+                     (void *)array);
+  if (rc != 0) {
+    free(array);
+    return -1;
+  }
   loop_lwipsocket_to_socket((void *)array);
   pthread_join(worker2, NULL);
   log_info("lwip ip pair %d %d", lwip_fd, fd);
@@ -285,14 +295,44 @@ static void portforward_service_handler(port_listen_t *pe) {
     if ((new_sd = accept(listen_fd, NULL, NULL)) >= 0) {
       pthread_t *worker = (pthread_t *)malloc(sizeof(pthread_t));  // TODO(jdz)  free
       port_listen_t *child_pe = (port_listen_t *)malloc(sizeof(port_listen_t));
-      strcpy(child_pe->host, pe->host);
+      if (worker == NULL || child_pe == NULL) {
+        close(new_sd);
+        free(worker);
+        free(child_pe);
+        continue;
+      }
+      if (snprintf(child_pe->host, sizeof(child_pe->host), "%s", pe->host) >=
+          (int)sizeof(child_pe->host)) {
+        close(new_sd);
+        free(worker);
+        free(child_pe);
+        continue;
+      }
       child_pe->port = pe->port;
       child_pe->local_fd = new_sd;
       if (pe->port == 0) {  // socks/http proxy
-        pthread_create(worker, NULL, (void*)&portforward_transparent_server_pipe, (void *)child_pe);
+        int rc = pthread_create(worker, NULL,
+                                (void *)&portforward_transparent_server_pipe,
+                                (void *)child_pe);
+        if (rc != 0) {
+          close(new_sd);
+          free(worker);
+          free(child_pe);
+          continue;
+        }
       } else {
-        pthread_create(worker, NULL, (void*)&portforward_static_server_pipe, (void *)child_pe);
+        int rc = pthread_create(worker, NULL,
+                                (void *)&portforward_static_server_pipe,
+                                (void *)child_pe);
+        if (rc != 0) {
+          close(new_sd);
+          free(worker);
+          free(child_pe);
+          continue;
+        }
       } 
+      pthread_detach(*worker);
+      free(worker);
 
     } else {
       log_info("abort the accept");
@@ -344,7 +384,14 @@ int portforward_static_start(char *src_host, uint16_t src_port, char *dst_host,
   }
 
   port_listen_t *pe = (port_listen_t *)malloc(sizeof(port_listen_t));
-  strcpy(pe->host, dst_host);
+  if (pe == NULL) {
+    goto fail;
+  }
+  if (snprintf(pe->host, sizeof(pe->host), "%s", dst_host) >=
+      (int)sizeof(pe->host)) {
+    free(pe);
+    goto fail;
+  }
   pe->port = dst_port;
   pe->local_fd = sock;
   log_debug("portforward_static_start");

@@ -72,7 +72,7 @@ static void on_resize(int signum) {
 }
 
 
-void cli_loop(int in, int out, int argc, const char *argv[]) {
+void cli_loop(int in, int out, int argc, char *argv[]) {
   repl_init();
   while (true) {
     interact_run(in, out);
@@ -87,7 +87,7 @@ void cli_loop(int in, int out, int argc, const char *argv[]) {
   }
 }
 
-void cli(int argc, const char *argv[], pid_t child_pid) {
+void cli(int argc, char *argv[], pid_t child_pid) {
   set_client_process();
   // Close write end
   close(in_fd[1]);
@@ -100,7 +100,7 @@ void cli(int argc, const char *argv[], pid_t child_pid) {
   exit(EXIT_SUCCESS);
 }
 
-int main(int argc, const char *argv[]) {
+int main(int argc, char *argv[]) {
   signal(SIGTTIN, SIG_IGN);
   signal(SIGTTOU, SIG_IGN);
   signal(SIGPIPE, SIG_IGN);

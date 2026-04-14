@@ -7,10 +7,12 @@
 
 #ifndef TERMTUNNEL_FILEEXCHANGE_H
 #define TERMTUNNEL_FILEEXCHANGE_H
-int file_send_start();
-int file_receiver_start();
+#include <stdint.h>
 
-int file_recv_start();
-int file_sender_start();
+int file_send_start(char *src_path, char *dst_path);
+int file_receiver_start(void);
+
+int file_recv_start(char *src_path, char *dst_path);
+int file_sender_start(void);
 
 #endif
